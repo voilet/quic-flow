@@ -30,7 +30,8 @@
       "Bash(./bin/quic-ctl:*)",
       "Bash(./scripts/test-cli.sh:*)",
       "Bash(find:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(go mod download:*)"
     ]
   }
 }
