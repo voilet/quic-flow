@@ -170,11 +170,8 @@ func SetupExampleRouter(logger *monitoring.Logger) *router.Router {
 	r.Use(router.RecoveryMiddleware(logger))
 	r.Use(router.LoggingMiddleware(logger))
 
-	// 注册内置处理器（统一注册）
-	RegisterBuiltinHandlers(r, &Config{
-		Logger:  logger,
-		Version: "1.0.0",
-	})
+	// 注册内置处理器
+	RegisterBuiltinHandlers(r, &Config{Version: "1.0.0"})
 
 	// 方式1：直接注册函数
 	r.Register("ping", HandlePing)

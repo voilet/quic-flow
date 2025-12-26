@@ -10,58 +10,42 @@ import (
 	"time"
 
 	"github.com/voilet/quic-flow/pkg/command"
-	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
-// ShellHandler Shell命令处理器
-type ShellHandler struct {
-	logger         *monitoring.Logger
-	maxOutputSize  int // 最大输出大小
-	defaultTimeout int // 默认超时（秒）
-	maxTimeout     int // 最大超时（秒）
-}
+// Shell 配置
+const (
+	shellMaxOutputSize  = 10 * 1024 // 10KB
+	shellDefaultTimeout = 30        // 秒
+	shellMaxTimeout     = 300       // 5分钟
+)
 
-// NewShellHandler 创建Shell处理器
-func NewShellHandler(logger *monitoring.Logger) *ShellHandler {
-	return &ShellHandler{
-		logger:         logger,
-		maxOutputSize:  10 * 1024, // 10KB
-		defaultTimeout: 30,
-		maxTimeout:     300, // 5分钟
-	}
-}
-
-// Handle 处理exec_shell命令
-func (h *ShellHandler) Handle(ctx context.Context, payload json.RawMessage) (json.RawMessage, error) {
+// ExecShell 执行 Shell 命令
+// 命令类型: exec_shell
+// 用法: r.Register(command.CmdExecShell, handlers.ExecShell)
+func ExecShell(ctx context.Context, payload json.RawMessage) (json.RawMessage, error) {
 	var params command.ShellParams
 	if err := json.Unmarshal(payload, &params); err != nil {
-		return nil, fmt.Errorf("invalid exec_shell params: %w", err)
+		return nil, fmt.Errorf("invalid params: %w", err)
 	}
 
-	// 验证命令
 	if strings.TrimSpace(params.Command) == "" {
 		return nil, fmt.Errorf("command is empty")
 	}
 
-	h.logger.Info("执行Shell命令", "command", params.Command)
-
 	// 设置超时
-	timeout := h.defaultTimeout
+	timeout := shellDefaultTimeout
 	if params.Timeout > 0 {
 		timeout = params.Timeout
 	}
-	if timeout > h.maxTimeout {
-		timeout = h.maxTimeout
+	if timeout > shellMaxTimeout {
+		timeout = shellMaxTimeout
 	}
 
-	// 创建带超时的上下文
+	// 执行命令
 	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	// 执行Shell命令
 	cmd := exec.CommandContext(execCtx, "sh", "-c", params.Command)
-
-	// 设置工作目录（如果指定）
 	if params.WorkDir != "" {
 		cmd.Dir = params.WorkDir
 	}
@@ -72,17 +56,13 @@ func (h *ShellHandler) Handle(ctx context.Context, payload json.RawMessage) (jso
 
 	err := cmd.Run()
 
-	// 截断输出
-	stdoutStr := h.truncateOutput(stdout.String())
-	stderrStr := h.truncateOutput(stderr.String())
-
-	// 构建结果（使用共享类型）
+	// 构建结果
 	result := command.ShellResult{
 		Success:  err == nil,
 		ExitCode: 0,
-		Stdout:   stdoutStr,
-		Stderr:   stderrStr,
-		Message:  "命令执行成功",
+		Stdout:   truncateOutput(stdout.String(), shellMaxOutputSize),
+		Stderr:   truncateOutput(stderr.String(), shellMaxOutputSize),
+		Message:  "success",
 	}
 
 	if err != nil {
@@ -90,26 +70,20 @@ func (h *ShellHandler) Handle(ctx context.Context, payload json.RawMessage) (jso
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else if execCtx.Err() == context.DeadlineExceeded {
-			result.Message = fmt.Sprintf("命令执行超时（%d秒）", timeout)
+			result.Message = fmt.Sprintf("timeout after %ds", timeout)
 			result.ExitCode = -1
 		} else {
 			result.ExitCode = -1
 		}
 	}
 
-	h.logger.Info("Shell命令执行完成",
-		"command", params.Command,
-		"success", result.Success,
-		"exit_code", result.ExitCode,
-	)
-
 	return json.Marshal(result)
 }
 
 // truncateOutput 截断输出
-func (h *ShellHandler) truncateOutput(s string) string {
-	if len(s) > h.maxOutputSize {
-		return s[:h.maxOutputSize] + "... (truncated)"
+func truncateOutput(s string, maxSize int) string {
+	if len(s) > maxSize {
+		return s[:maxSize] + "... (truncated)"
 	}
 	return s
 }

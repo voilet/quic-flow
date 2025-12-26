@@ -29,10 +29,9 @@ func SetupClientRouter(logger *monitoring.Logger) *router.Router {
 	r.Use(router.LoggingMiddleware(logger))  // 日志记录
 
 	// ========================================
-	// 注册内置处理器（统一注册保证一致性）
+	// 注册内置处理器
 	// ========================================
 	handlers.RegisterBuiltinHandlers(r, &handlers.Config{
-		Logger:  logger,
 		Version: ClientVersion,
 	})
 
