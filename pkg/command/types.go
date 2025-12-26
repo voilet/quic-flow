@@ -70,8 +70,20 @@ type CommandExecutor interface {
 
 // CommandPayload 命令载荷（放在DataMessage.Payload中）
 type CommandPayload struct {
-	CommandType string          `json:"command_type"` // 命令类型
-	Payload     json.RawMessage `json:"payload"`      // 命令参数
+	CommandType  string          `json:"command_type"`            // 命令类型
+	Payload      json.RawMessage `json:"payload"`                 // 命令参数
+	NeedCallback bool            `json:"need_callback,omitempty"` // 是否需要异步回调（执行完毕后主动上报结果）
+	CallbackID   string          `json:"callback_id,omitempty"`   // 回调ID（用于关联请求和回调）
+}
+
+// CallbackPayload 回调载荷（客户端执行完命令后发送给服务器）
+type CallbackPayload struct {
+	CallbackID  string          `json:"callback_id"`           // 回调ID（对应CommandPayload.CallbackID）
+	CommandType string          `json:"command_type"`          // 原命令类型
+	Success     bool            `json:"success"`               // 执行是否成功
+	Result      json.RawMessage `json:"result,omitempty"`      // 执行结果
+	Error       string          `json:"error,omitempty"`       // 错误信息
+	Duration    int64           `json:"duration_ms,omitempty"` // 执行耗时（毫秒）
 }
 
 // MultiCommandRequest HTTP请求结构 - 多播命令（同时下发到多个客户端）

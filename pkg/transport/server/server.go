@@ -12,6 +12,7 @@ import (
 	"github.com/quic-go/quic-go"
 
 	"github.com/voilet/QuicFlow/pkg/callback"
+	"github.com/voilet/QuicFlow/pkg/dispatcher"
 	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
 	"github.com/voilet/QuicFlow/pkg/monitoring"
 	"github.com/voilet/QuicFlow/pkg/protocol"
@@ -32,6 +33,9 @@ type Server struct {
 
 	// Promise 管理（异步回调）
 	promises *callback.PromiseManager
+
+	// 消息分发器（路由）
+	dispatcher *dispatcher.Dispatcher
 
 	// 监控
 	metrics *monitoring.Metrics
@@ -376,21 +380,50 @@ func (s *Server) handlePing(clientID string, stream *quic.Stream, frame *protoco
 	s.logger.Debug("Pong sent", "client_id", clientID)
 }
 
-// handleData 处理数据消息（简化实现，完整版在 US2）
+// handleData 处理数据消息
 func (s *Server) handleData(clientID string, stream *quic.Stream, frame *protocol.Frame) {
 	s.logger.Debug("Data message received", "client_id", clientID)
 	s.metrics.RecordMessageReceived(int64(len(frame.Payload)))
 
-	// 触发事件（如果有）
-	if s.hooks != nil {
-		// 解析消息 ID
-		dataMsg, err := codec.DecodeDataMessage(frame)
-		if err == nil {
-			s.hooks.SafeOnMessageReceived(dataMsg.MsgId, clientID)
-		}
+	// 解析消息
+	dataMsg, err := codec.DecodeDataMessage(frame)
+	if err != nil {
+		s.logger.Error("Failed to decode data message", "client_id", clientID, "error", err)
+		s.metrics.RecordDecodingError()
+		return
 	}
 
-	// TODO: US2 将实现完整的 Dispatcher 路由
+	// 触发事件
+	if s.hooks != nil {
+		s.hooks.SafeOnMessageReceived(dataMsg.MsgId, clientID)
+	}
+
+	// 使用 Dispatcher 分发消息（如果已设置）
+	if s.dispatcher != nil {
+		// 创建响应通道
+		responseCh := make(chan *dispatcher.DispatchResponse, 1)
+
+		// 异步分发
+		if err := s.dispatcher.Dispatch(s.ctx, dataMsg, responseCh); err != nil {
+			s.logger.Error("Failed to dispatch message", "client_id", clientID, "msg_id", dataMsg.MsgId, "error", err)
+			return
+		}
+
+		// 等待响应（如果需要）
+		if dataMsg.WaitAck {
+			select {
+			case resp := <-responseCh:
+				if resp.Response != nil {
+					// 发送响应回客户端
+					s.sendResponse(clientID, stream, resp.Response)
+				}
+			case <-s.ctx.Done():
+				return
+			}
+		}
+	} else {
+		s.logger.Warn("No dispatcher set, message not processed", "client_id", clientID, "msg_id", dataMsg.MsgId)
+	}
 }
 
 // handleAck 处理确认消息 (T043)
@@ -449,6 +482,40 @@ func (s *Server) GetClientInfo(clientID string) (*protocol.ClientInfo, error) {
 // GetMetrics 获取服务器指标快照
 func (s *Server) GetMetrics() *protocol.MetricsSnapshot {
 	return s.metrics.GetSnapshot()
+}
+
+// SetDispatcher 设置消息分发器（路由）
+// 必须在 Start() 之前调用
+func (s *Server) SetDispatcher(d *dispatcher.Dispatcher) {
+	s.dispatcher = d
+	s.logger.Info("Dispatcher set for server")
+}
+
+// GetDispatcher 获取消息分发器
+func (s *Server) GetDispatcher() *dispatcher.Dispatcher {
+	return s.dispatcher
+}
+
+// sendResponse 发送响应消息到客户端
+func (s *Server) sendResponse(clientID string, stream *quic.Stream, msg *protocol.DataMessage) {
+	if msg == nil {
+		return
+	}
+
+	// 编码响应消息
+	responseFrame, err := codec.EncodeDataMessage(msg)
+	if err != nil {
+		s.logger.Error("Failed to encode response", "client_id", clientID, "error", err)
+		return
+	}
+
+	// 发送响应
+	if err := s.codec.WriteFrame(stream, responseFrame); err != nil {
+		s.logger.Error("Failed to send response", "client_id", clientID, "error", err)
+		return
+	}
+
+	s.logger.Debug("Response sent", "client_id", clientID, "msg_id", msg.MsgId)
 }
 
 // SendTo 发送消息到指定客户端（单播）(T038)
