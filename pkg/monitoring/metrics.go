@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // Metrics 定义系统指标结构，使用 atomic 保证并发安全

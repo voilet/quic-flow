@@ -3,9 +3,9 @@ package client
 import (
 	"time"
 
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	"github.com/voilet/QuicFlow/pkg/transport/codec"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/transport/codec"
 )
 
 // heartbeatLoop 客户端心跳循环 (T030)

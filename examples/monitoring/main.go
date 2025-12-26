@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	"github.com/voilet/QuicFlow/pkg/transport/server"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/transport/server"
 )
 
 // 监控示例程序 (T049)

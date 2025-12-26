@@ -7,9 +7,9 @@ import (
 
 	"github.com/quic-go/quic-go"
 
-	"github.com/voilet/QuicFlow/pkg/dispatcher"
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	"github.com/voilet/QuicFlow/pkg/transport/codec"
+	"github.com/voilet/quic-flow/pkg/dispatcher"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/transport/codec"
 )
 
 // receiveLoop 客户端消息接收循环 (T045)

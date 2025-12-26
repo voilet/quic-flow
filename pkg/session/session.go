@@ -7,7 +7,7 @@ import (
 
 	"github.com/quic-go/quic-go"
 
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // ClientSession 代表一个已连接的客户端会话

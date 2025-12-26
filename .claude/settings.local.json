@@ -31,7 +31,15 @@
       "Bash(./scripts/test-cli.sh:*)",
       "Bash(find:*)",
       "Bash(xargs:*)",
-      "Bash(go mod download:*)"
+      "Bash(go mod download:*)",
+      "Bash(timeout 3 ./bin/quic-server:*)",
+      "Bash(./bin/quic-server:*)",
+      "Bash(protoc-gen-go:*)",
+      "Bash(go clean:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git tag:*)"
     ]
   }
 }

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/voilet/QuicFlow/pkg/callback"
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/callback"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // ServerAPI 服务器接口（用于发送消息）

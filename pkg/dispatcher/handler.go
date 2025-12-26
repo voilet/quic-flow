@@ -3,7 +3,7 @@ package dispatcher
 import (
 	"context"
 
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // MessageHandler 消息处理器接口 (T037)

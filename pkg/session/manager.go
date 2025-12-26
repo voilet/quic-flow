@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
-	"github.com/voilet/QuicFlow/pkg/monitoring"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // SessionManager 管理所有客户端会话

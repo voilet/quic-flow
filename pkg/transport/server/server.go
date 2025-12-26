@@ -11,13 +11,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 
-	"github.com/voilet/QuicFlow/pkg/callback"
-	"github.com/voilet/QuicFlow/pkg/dispatcher"
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	"github.com/voilet/QuicFlow/pkg/session"
-	"github.com/voilet/QuicFlow/pkg/transport/codec"
+	"github.com/voilet/quic-flow/pkg/callback"
+	"github.com/voilet/quic-flow/pkg/dispatcher"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/session"
+	"github.com/voilet/quic-flow/pkg/transport/codec"
 )
 
 // Server QUIC 服务器

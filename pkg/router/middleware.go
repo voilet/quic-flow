@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // LoggingMiddleware 日志中间件

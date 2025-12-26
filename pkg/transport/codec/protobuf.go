@@ -7,8 +7,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
 )
 
 // Codec 定义编解码器接口

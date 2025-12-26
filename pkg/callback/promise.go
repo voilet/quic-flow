@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // Promise 异步请求的响应承诺 (T040)

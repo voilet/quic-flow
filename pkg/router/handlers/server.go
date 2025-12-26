@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	"github.com/voilet/QuicFlow/pkg/router"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/router"
 )
 
 // ========================================

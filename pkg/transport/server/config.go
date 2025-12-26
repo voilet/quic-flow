@@ -7,9 +7,9 @@ import (
 
 	"github.com/quic-go/quic-go"
 
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	tlsutil "github.com/voilet/QuicFlow/pkg/transport/tls"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	tlsutil "github.com/voilet/quic-flow/pkg/transport/tls"
 )
 
 // ServerConfig 服务器配置

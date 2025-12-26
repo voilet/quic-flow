@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // ShellParams exec_shell命令的参数

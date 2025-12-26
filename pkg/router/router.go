@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // Handler 命令处理函数

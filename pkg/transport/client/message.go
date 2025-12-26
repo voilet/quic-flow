@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	"github.com/voilet/QuicFlow/pkg/transport/codec"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/transport/codec"
 )
 
 // SendMessage 发送消息到服务器 (T044)

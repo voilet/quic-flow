@@ -10,13 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/api"
-	"github.com/voilet/QuicFlow/pkg/command"
-	"github.com/voilet/QuicFlow/pkg/dispatcher"
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	"github.com/voilet/QuicFlow/pkg/protocol"
-	"github.com/voilet/QuicFlow/pkg/router"
-	"github.com/voilet/QuicFlow/pkg/transport/server"
+	"github.com/voilet/quic-flow/pkg/api"
+	"github.com/voilet/quic-flow/pkg/command"
+	"github.com/voilet/quic-flow/pkg/dispatcher"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/router"
+	"github.com/voilet/quic-flow/pkg/transport/server"
 )
 
 func main() {

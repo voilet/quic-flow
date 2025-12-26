@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // Dispatcher 消息分发器 (T035, T036)

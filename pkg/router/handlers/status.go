@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/voilet/QuicFlow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // StatusResult get_status命令的结果

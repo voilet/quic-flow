@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	pkgerrors "github.com/voilet/QuicFlow/pkg/errors"
+	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
 )
 
 const (

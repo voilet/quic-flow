@@ -1,4 +1,4 @@
-module github.com/voilet/QuicFlow
+module github.com/voilet/quic-flow
 
 go 1.25.4
 

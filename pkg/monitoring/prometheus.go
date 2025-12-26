@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/voilet/QuicFlow/pkg/protocol"
+	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
 // PrometheusHandler HTTP handler for Prometheus metrics export (T048)
