@@ -38,9 +38,16 @@ type ClientConfig struct {
 	InitialBackoff   time.Duration // 首次重试延迟（默认 1 秒）
 	MaxBackoff       time.Duration // 最大重试延迟（默认 60 秒）
 
+	// 重连抖动配置
+	EnableJitter bool    // 是否启用抖动（默认 true）
+	JitterRatio  float64 // 抖动比例，默认 0.25（±25%）
+
 	// 心跳配置
 	HeartbeatInterval time.Duration // 心跳间隔（默认 15 秒）
 	HeartbeatTimeout  time.Duration // 心跳超时（默认 5 秒）
+
+	// 心跳容错配置
+	MaxHeartbeatFailures int32 // 最大心跳失败次数（默认 1）
 
 	// 消息配置
 	DefaultMessageTimeout time.Duration // 默认消息超时（默认 30 秒）
@@ -70,9 +77,14 @@ func NewDefaultClientConfig(clientID string) *ClientConfig {
 		InitialBackoff:   1 * time.Second,
 		MaxBackoff:       60 * time.Second,
 
+		// 抖动默认值
+		EnableJitter: true,
+		JitterRatio:  0.25, // ±25%
+
 		// 心跳默认值
-		HeartbeatInterval: 15 * time.Second,
-		HeartbeatTimeout:  5 * time.Second,
+		HeartbeatInterval:    15 * time.Second,
+		HeartbeatTimeout:     5 * time.Second,
+		MaxHeartbeatFailures: 1, // 保持现有行为
 
 		// 消息默认值
 		DefaultMessageTimeout: 30 * time.Second,
@@ -116,6 +128,18 @@ func (c *ClientConfig) Validate() error {
 		}
 		if c.MaxBackoff < c.InitialBackoff {
 			return fmt.Errorf("%w: MaxBackoff must be >= InitialBackoff", pkgerrors.ErrInvalidConfig)
+		}
+
+		// 验证抖动配置
+		if c.EnableJitter {
+			if c.JitterRatio < 0 || c.JitterRatio > 1 {
+				return fmt.Errorf("%w: JitterRatio 必须在 [0, 1] 范围内, 得到 %.2f", pkgerrors.ErrInvalidConfig, c.JitterRatio)
+			}
+		}
+
+		// 验证心跳容错配置
+		if c.MaxHeartbeatFailures < 1 {
+			return fmt.Errorf("%w: MaxHeartbeatFailures 必须 >= 1, 得到 %d", pkgerrors.ErrInvalidConfig, c.MaxHeartbeatFailures)
 		}
 	}
 
