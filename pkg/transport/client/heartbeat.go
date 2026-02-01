@@ -3,7 +3,7 @@ package client
 import (
 	"time"
 
-	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/errors"
 	"github.com/voilet/quic-flow/pkg/protocol"
 	"github.com/voilet/quic-flow/pkg/transport/codec"
 )
@@ -16,27 +16,46 @@ func (c *Client) heartbeatLoop() {
 	ticker := time.NewTicker(c.config.HeartbeatInterval)
 	defer ticker.Stop()
 
-	c.logger.Debug("Heartbeat loop started", "interval", c.config.HeartbeatInterval)
+	c.logger.Debug("心跳循环已启动", "interval", c.config.HeartbeatInterval)
 
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.logger.Debug("Heartbeat loop stopped")
+			c.logger.Debug("心跳循环已停止")
 			return
 
 		case <-ticker.C:
 			if !c.IsConnected() {
-				c.logger.Debug("Not connected, skipping heartbeat")
+				c.logger.Debug("未连接，跳过心跳")
 				continue
 			}
 
 			if err := c.sendHeartbeat(); err != nil {
-				c.logger.Error("Heartbeat failed", "error", err)
+				// 累积失败次数
+				failures := c.heartbeatFailures.Add(1)
+				c.logger.Error("心跳失败",
+					"failures", failures,
+					"max", c.config.MaxHeartbeatFailures,
+					"error", err)
 				c.metrics.RecordNetworkError()
 
-				// 心跳失败，触发重连
-				c.setState(protocol.ClientState_CLIENT_STATE_IDLE)
-				c.notifyDisconnect()
+				// 只有超过阈值才触发重连
+				if failures >= c.config.MaxHeartbeatFailures {
+					c.logger.Warn("心跳失败次数达到阈值，触发重连",
+						"failures", failures,
+						"max", c.config.MaxHeartbeatFailures)
+
+					c.heartbeatFailures.Store(0) // 重置计数
+					c.setState(protocol.ClientState_CLIENT_STATE_IDLE)
+					c.notifyDisconnect()
+				}
+			} else {
+				// 心跳成功，重置计数
+				prevFailures := c.heartbeatFailures.Swap(0)
+				if prevFailures > 0 {
+					c.logger.Info("心跳恢复",
+						"previous_failures", prevFailures)
+				}
 			}
 		}
 	}
@@ -85,7 +104,7 @@ func (c *Client) sendHeartbeat() error {
 		}
 
 		if pongFrame.Type != protocol.FrameType_FRAME_TYPE_PONG {
-			pongCh <- pkgerrors.ErrInvalidFrameType
+			pongCh <- errors.ErrInvalidFrameType
 			return
 		}
 
@@ -111,7 +130,7 @@ func (c *Client) sendHeartbeat() error {
 	case <-time.After(c.config.HeartbeatTimeout):
 		c.logger.Warn("Heartbeat timeout", "timeout", c.config.HeartbeatTimeout)
 		c.metrics.RecordHeartbeatTimeout()
-		return pkgerrors.ErrHeartbeatTimeout
+		return errors.ErrHeartbeatTimeout
 	}
 }
 
