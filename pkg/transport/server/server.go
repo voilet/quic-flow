@@ -726,6 +726,12 @@ func (s *Server) Broadcast(msg *protocol.DataMessage) (int, []error) {
 
 	s.logger.Debug("Broadcasting message", "msg_id", msg.MsgId, "recipients", len(clientIDs))
 
+	// ========== 性能优化：限制并发数 ==========
+	// 使用 semaphore 限制并发 goroutine 数量，防止大规模广播时 goroutine 爆炸
+	// 默认最多 1000 并发，避免在 10 万连接时创建 10 万个 goroutine
+	maxConcurrency := 1000
+	sem := make(chan struct{}, maxConcurrency)
+
 	// 并发发送到所有客户端
 	var wg sync.WaitGroup
 	successCount := 0
@@ -733,9 +739,10 @@ func (s *Server) Broadcast(msg *protocol.DataMessage) (int, []error) {
 	var errors []error
 
 	for _, clientID := range clientIDs {
+		sem <- struct{}{} // 获取令牌（阻塞等待直到有空位）
 		wg.Add(1)
 		go func(cid string) {
-			defer wg.Done()
+			defer func() { <-sem; wg.Done() }() // 释放令牌
 
 			// 创建消息副本（设置接收方 ID）
 			msgCopy := *msg
@@ -745,7 +752,7 @@ func (s *Server) Broadcast(msg *protocol.DataMessage) (int, []error) {
 				mu.Lock()
 				errors = append(errors, fmt.Errorf("failed to send to %s: %w", cid, err))
 				mu.Unlock()
-				s.logger.Warn("Broadcast failed for client", "client_id", cid, "error", err)
+				s.logger.Debug("Broadcast failed for client", "client_id", cid, "error", err)
 			} else {
 				mu.Lock()
 				successCount++

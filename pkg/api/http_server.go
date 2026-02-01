@@ -176,6 +176,12 @@ type ListClientsResponse struct {
 	Clients      []ClientDetail `json:"clients"`
 }
 
+const (
+	// maxClientsPerRequest API 请求返回客户端数量的最大值
+	// 防止在大规模连接场景下返回过大数据量导致内存/网络问题
+	maxClientsPerRequest = 10000
+)
+
 // handleListClients 处理获取客户端列表请求
 // 整合数据库设备信息和当前会话状态
 // 支持分页: ?offset=0&limit=100
@@ -195,6 +201,13 @@ func (h *HTTPServer) handleListClients(c *gin.Context) {
 		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
 			limit = v
 		}
+	}
+
+	// ========== 性能优化：强制最大 limit ==========
+	// 防止请求无限制数据导致内存/网络问题
+	// 如果没有指定 limit 或 limit 超过最大值，使用默认值
+	if limit == 0 || limit > maxClientsPerRequest {
+		limit = maxClientsPerRequest
 	}
 
 	// 解析状态筛选
@@ -312,14 +325,9 @@ func (h *HTTPServer) handleListClients(c *gin.Context) {
 		}
 	} else {
 		// 没有 database，只返回当前在线的客户端
-		var clients []session.ClientInfoBrief
-
-		if limit > 0 {
-			clients, total = h.serverAPI.ListClientsWithDetailsPaginated(offset, limit)
-		} else {
-			clients = h.serverAPI.ListClientsWithDetails()
-			total = int64(len(clients))
-		}
+		// ========== 性能优化：始终使用分页 API ==========
+		// 即使没有指定 limit，也使用默认的最大值，避免一次性获取全部客户端
+		clients, total := h.serverAPI.ListClientsWithDetailsPaginated(offset, limit)
 
 		onlineCount = total
 		details = make([]ClientDetail, len(clients))

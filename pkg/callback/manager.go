@@ -16,7 +16,16 @@ const (
 
 	// DefaultPromiseCleanupInterval 默认清理间隔
 	DefaultPromiseCleanupInterval = 10 * time.Second
+
+	// delayedRemoveDelay 延迟删除时间（让接收方有时间读取）
+	delayedRemoveDelay = 100 * time.Millisecond
 )
+
+// delayedRemove 延迟删除请求
+type delayedRemove struct {
+	msgID     string
+	removeAt  time.Time
+}
 
 // PromiseManager Promise 管理器 (T041)
 // 负责创建、存储、查找和清理 Promise
@@ -35,6 +44,10 @@ type PromiseManager struct {
 	logger  *monitoring.Logger
 	metrics *monitoring.Metrics
 	hooks   *monitoring.EventHooks // 添加钩子支持 (T050)
+
+	// ========== 性能优化：延迟删除通道 ==========
+	// 使用单一通道和 goroutine 处理所有延迟删除，避免每次完成都创建新 goroutine
+	delayedRemoveCh chan delayedRemove
 
 	// 控制
 	ctx    chan struct{}
@@ -82,6 +95,7 @@ func NewPromiseManager(config *PromiseManagerConfig) *PromiseManager {
 		metrics:         config.Metrics,
 		hooks:           config.Hooks, // 设置钩子 (T050)
 		ctx:             make(chan struct{}),
+		delayedRemoveCh: make(chan delayedRemove, 1000), // 缓冲 1000 个待删除项
 	}
 
 	return pm
@@ -93,6 +107,9 @@ func (pm *PromiseManager) Start() {
 
 	pm.wg.Add(1)
 	go pm.cleanupLoop()
+
+	pm.wg.Add(1)
+	go pm.delayedRemoveLoop()
 
 	pm.logger.Info("PromiseManager started")
 }
@@ -166,11 +183,19 @@ func (pm *PromiseManager) Complete(msgID string, ack *protocol.AckMessage) error
 	if promise.Complete(ack) {
 		pm.logger.Debug("Promise completed", "msg_id", msgID, "status", ack.Status)
 		pm.metrics.RecordPromiseCompleted()
-		// 延迟删除，让接收方有时间读取
-		go func() {
-			time.Sleep(100 * time.Millisecond)
+
+		// ========== 性能优化：发送到延迟删除通道 ==========
+		// 不再为每个 Promise 创建独立的 goroutine
+		// 而是发送到统一的延迟删除通道，由单一 goroutine 处理
+		select {
+		case pm.delayedRemoveCh <- delayedRemove{
+			msgID:    msgID,
+			removeAt: time.Now().Add(delayedRemoveDelay),
+		}:
+		default:
+			// 通道满则直接删除（接收方应该已经快速读取）
 			pm.Remove(msgID)
-		}()
+		}
 		return nil
 	}
 
@@ -186,11 +211,16 @@ func (pm *PromiseManager) Fail(msgID string, err error) error {
 
 	if promise.Fail(err) {
 		pm.logger.Debug("Promise failed", "msg_id", msgID, "error", err)
-		// 延迟删除
-		go func() {
-			time.Sleep(100 * time.Millisecond)
+
+		// ========== 性能优化：发送到延迟删除通道 ==========
+		select {
+		case pm.delayedRemoveCh <- delayedRemove{
+			msgID:    msgID,
+			removeAt: time.Now().Add(delayedRemoveDelay),
+		}:
+		default:
 			pm.Remove(msgID)
-		}()
+		}
 		return nil
 	}
 
@@ -207,11 +237,51 @@ func (pm *PromiseManager) onTimeout(msgID string) {
 		pm.hooks.SafeOnPromiseTimeout(msgID)
 	}
 
-	// 延迟删除，让接收方有时间读取超时错误
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+	// ========== 性能优化：发送到延迟删除通道 ==========
+	select {
+	case pm.delayedRemoveCh <- delayedRemove{
+		msgID:    msgID,
+		removeAt: time.Now().Add(delayedRemoveDelay),
+	}:
+	default:
 		pm.Remove(msgID)
-	}()
+	}
+}
+
+// ========== 性能优化：延迟删除处理循环 ==========
+// 单一 goroutine 处理所有延迟删除，而不是每个 Promise 一个 goroutine
+func (pm *PromiseManager) delayedRemoveLoop() {
+	defer pm.wg.Done()
+
+	// 使用小顶堆维护待删除项（按时间排序）
+	// 这里使用简单切片 + 定期检查的方式
+	var pending []delayedRemove
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-pm.ctx:
+			return
+
+		case item := <-pm.delayedRemoveCh:
+			pending = append(pending, item)
+
+		case <-ticker.C:
+			now := time.Now()
+			// 清理已到时间的项
+			i := 0
+			for _, item := range pending {
+				if now.After(item.removeAt) || now.Equal(item.removeAt) {
+					pm.Remove(item.msgID)
+				} else {
+					pending[i] = item
+					i++
+				}
+			}
+			pending = pending[:i]
+		}
+	}
 }
 
 // cleanupLoop 定期清理过期的 Promise

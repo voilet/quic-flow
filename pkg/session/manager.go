@@ -223,20 +223,36 @@ func (sm *SessionManager) ListClientsWithDetailsPaginated(offset, limit int) ([]
 		return []ClientInfoBrief{}, total
 	}
 
-	// 收集所有客户端
-	all := sm.ListClientsWithDetails()
+	// ========== 性能优化：提前终止遍历 ==========
+	// 不再收集所有客户端再分片，而是在遍历时跳过前面的元素
+	// 当收集够 limit 个元素后立即停止遍历
+	result := make([]ClientInfoBrief, 0, min(limit, int(total)))
+	skipped := 0
+	collected := 0
 
-	// 应用分页
-	end := offset + limit
-	if limit == 0 || end > len(all) {
-		end = len(all)
-	}
+	sm.sessions.Range(func(key, value interface{}) bool {
+		// 跳过前面的元素
+		if skipped < offset {
+			skipped++
+			return true
+		}
 
-	if offset >= len(all) {
-		return []ClientInfoBrief{}, total
-	}
+		// 收集元素直到达到 limit
+		if limit > 0 && collected >= limit {
+			return false // 停止遍历
+		}
 
-	return all[offset:end], total
+		session := value.(*ClientSession)
+		result = append(result, ClientInfoBrief{
+			ClientID:    session.ClientID,
+			RemoteAddr:  session.RemoteAddr,
+			ConnectedAt: session.ConnectedAt.UnixMilli(),
+		})
+		collected++
+		return true
+	})
+
+	return result, total
 }
 
 // heartbeatChecker 心跳检查器（独立 goroutine）
@@ -260,6 +276,12 @@ func (sm *SessionManager) heartbeatChecker() {
 func (sm *SessionManager) checkHeartbeats() {
 	now := time.Now()
 
+	// ========== 性能优化：汇总日志，减少 I/O 开销 ==========
+	// 10 万连接场景下，每条超时日志都是开销
+	// 使用汇总日志代替逐条日志，大幅减少日志 I/O
+	var timeoutClients []string
+	var removedClients []string
+
 	sm.Range(func(clientID string, session *ClientSession) bool {
 		lastHB := session.GetLastHeartbeat()
 		timeSinceLastHB := now.Sub(lastHB)
@@ -268,18 +290,13 @@ func (sm *SessionManager) checkHeartbeats() {
 		if timeSinceLastHB > 15*time.Second {
 			timeoutCount := session.IncrementTimeoutCount()
 
-			sm.logger.Warn("Heartbeat timeout detected",
-				"client_id", clientID,
-				"time_since_last_hb", timeSinceLastHB,
-				"timeout_count", timeoutCount,
-				"max_timeout_count", sm.maxTimeoutCount)
+			// 收集超时客户端（不逐条记录日志）
+			if timeoutCount == 1 {
+				timeoutClients = append(timeoutClients, clientID)
+			}
 
 			// 达到最大超时次数，清理会话
 			if timeoutCount >= sm.maxTimeoutCount {
-				sm.logger.Error("Heartbeat timeout threshold reached, removing session",
-					"client_id", clientID,
-					"timeout_count", timeoutCount)
-
 				// 触发钩子
 				if sm.hooks != nil {
 					sm.hooks.SafeOnHeartbeatTimeout(clientID)
@@ -287,6 +304,7 @@ func (sm *SessionManager) checkHeartbeats() {
 
 				// 关闭连接
 				if err := session.Close("heartbeat timeout"); err != nil {
+					// 只在错误时记录
 					sm.logger.Error("Failed to close session",
 						"client_id", clientID,
 						"error", err)
@@ -297,19 +315,27 @@ func (sm *SessionManager) checkHeartbeats() {
 					sm.logger.Error("Failed to remove session",
 						"client_id", clientID,
 						"error", err)
+				} else {
+					removedClients = append(removedClients, clientID)
 				}
 			}
 		} else {
-			// 心跳正常，重置超时计数
+			// 心跳正常，重置超时计数（无日志）
 			if session.GetTimeoutCount() > 0 {
 				session.ResetTimeoutCount()
-				sm.logger.Debug("Heartbeat timeout count reset",
-					"client_id", clientID)
 			}
 		}
 
 		return true // 继续遍历
 	})
+
+	// 汇总记录一条日志（替代逐条日志）
+	if len(timeoutClients) > 0 || len(removedClients) > 0 {
+		sm.logger.Warn("Heartbeat check summary",
+			"timeout_count", len(timeoutClients),
+			"removed_count", len(removedClients),
+			"total_sessions", sm.Count())
+	}
 }
 
 // CloseAll 关闭所有会话

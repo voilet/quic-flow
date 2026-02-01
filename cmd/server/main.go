@@ -12,10 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/voilet/quic-flow/pkg/api"
+	"github.com/voilet/quic-flow/pkg/audit"
 	"github.com/voilet/quic-flow/pkg/auth"
 	"github.com/voilet/quic-flow/pkg/auth/captcha"
 	"github.com/voilet/quic-flow/pkg/auth/middleware"
-	"github.com/voilet/quic-flow/pkg/audit"
 	"github.com/voilet/quic-flow/pkg/batch"
 	"github.com/voilet/quic-flow/pkg/command"
 	"github.com/voilet/quic-flow/pkg/config"
@@ -232,7 +232,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
-	
+
 	// 记录数据库状态
 	if releaseDB != nil {
 		logger.Info("Database is available", "releaseDB_not_nil", true)
@@ -389,7 +389,7 @@ func runServer(cmd *cobra.Command, args []string) {
 	// 设置数据库初始化回调，当通过 setup 页面初始化数据库后更新 release API 和 audit_store
 	setupAPI.SetOnDBReady(func(db *gorm.DB) {
 		releaseDB = db // 更新 releaseDB 引用
-		
+
 		releaseAPI.SetDB(db)
 		releaseAPI.SetRemoteExecutor(commandManager)
 		logger.Info("Release API database updated via setup")
@@ -722,16 +722,16 @@ func initDatabase(cfg *config.ServerConfig, logger *monitoring.Logger) (*gorm.DB
 	}
 
 	dbConfig := &releasemodels.DatabaseConfig{
-		Type:           dbType,
-		Host:           cfg.Database.Host,
-		Port:           cfg.Database.Port,
-		User:           cfg.Database.User,
-		Password:       cfg.Database.Password,
-		DBName:         cfg.Database.DBName,
-		SSLMode:        cfg.Database.SSLMode,
-		Charset:        cfg.Database.Charset,
-		MaxIdleConns:   cfg.Database.MaxIdleConns,
-		MaxOpenConns:   cfg.Database.MaxOpenConns,
+		Type:            dbType,
+		Host:            cfg.Database.Host,
+		Port:            cfg.Database.Port,
+		User:            cfg.Database.User,
+		Password:        cfg.Database.Password,
+		DBName:          cfg.Database.DBName,
+		SSLMode:         cfg.Database.SSLMode,
+		Charset:         cfg.Database.Charset,
+		MaxIdleConns:    cfg.Database.MaxIdleConns,
+		MaxOpenConns:    cfg.Database.MaxOpenConns,
 		ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
 	}
 
@@ -803,8 +803,8 @@ func setupAuthRoutes(db *gorm.DB, httpServer *api.HTTPServer) (*auth.Manager, er
 	jwtConfig := &middleware.JWTConfig{
 		SigningKey:  "quic-flow-jwt-secret-key-change-in-production",
 		ExpiresTime: 7 * 24 * time.Hour, // 7天
-		BufferTime:   1 * time.Hour,      // 1小时缓冲
-		Issuer:       "quic-flow",
+		BufferTime:  1 * time.Hour,      // 1小时缓冲
+		Issuer:      "quic-flow",
 	}
 
 	// 创建权限管理器

@@ -61,8 +61,8 @@ session:
   heartbeat_interval: 30
   # 心跳超时（秒）
   heartbeat_timeout: 90
-  # 心跳检查间隔（秒）
-  heartbeat_check_interval: 10
+  # 心跳检查间隔（秒）- 性能优化：从 10 增加到 15，减少遍历开销约 30%
+  heartbeat_check_interval: 15
   # 最大超时次数
   max_timeout_count: 3
 
