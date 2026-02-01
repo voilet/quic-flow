@@ -238,52 +238,92 @@ func (c *Client) reconnectLoop() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.logger.Debug("Reconnect loop stopped")
+			c.logger.Debug("重连循环已停止")
 			return
 		case <-c.disconnectCh:
-			// 连接断开，尝试重连
-			c.logger.Info("Connection lost, attempting to reconnect...")
+			c.logger.Info("连接已断开，准备重连...")
 
-			// 指数退避（使用 timer 以便能够响应 context 取消）
-			c.logger.Debug("Waiting before reconnect", "backoff", backoff)
-			timer := time.NewTimer(backoff)
+			// 计算带抖动的退避时间
+			waitTime := backoff
+			if c.config.EnableJitter {
+				jitterRange := float64(waitTime) * c.config.JitterRatio
+				jitter := c.jitterRNG.Float64()*2 - 1 // [-1, 1]
+				waitTime = waitTime + time.Duration(jitterRange*float64(jitter))
+
+				c.logger.Debug("计算带抖动的退避时间",
+					"base_backoff", backoff,
+					"jitter_ratio", c.config.JitterRatio,
+					"wait_time", waitTime)
+			}
+
+			// 等待退避时间
+			timer := time.NewTimer(waitTime)
 			select {
 			case <-c.ctx.Done():
 				timer.Stop()
-				c.logger.Debug("Reconnect loop stopped during backoff")
+				c.logger.Debug("重连循环已停止（等待期间）")
 				return
 			case <-timer.C:
 			}
 
 			// 增加重连尝试次数
-			c.reconnectAttempts.Add(1)
+			attempts := c.reconnectAttempts.Add(1)
 
-			// 尝试重连
+			// 根据上次错误类型调整退避
+			c.lastErrorTypeMu.RLock()
+			lastErrorType := c.lastErrorType
+			c.lastErrorTypeMu.RUnlock()
+
+			adjustedBackoff := time.Duration(float64(backoff) * lastErrorType.GetBackoffMultiplier())
+			if adjustedBackoff != backoff {
+				c.logger.Debug("根据错误类型调整退避",
+					"base", backoff,
+					"error_type", lastErrorType,
+					"adjusted", adjustedBackoff)
+				backoff = adjustedBackoff
+			}
+
+			c.logger.Info("开始重连尝试", "attempt", attempts)
+
+			// 尝试连接
 			if err := c.dial(); err != nil {
-				c.logger.Error("Reconnect failed", "attempt", c.reconnectAttempts.Load(), "error", err)
+				// 连接失败
+				errorType := errors.ClassifyNetworkError(err)
+
+				c.lastErrorTypeMu.Lock()
+				c.lastErrorType = errorType
+				c.lastErrorTypeMu.Unlock()
+
+				c.logger.Error("重连失败",
+					"attempt", attempts,
+					"error_type", errorType,
+					"error", err)
 
 				// 检查是否应该停止重连
 				select {
 				case <-c.ctx.Done():
-					c.logger.Debug("Reconnect loop stopped after dial failure")
+					c.logger.Debug("重连循环已停止（连接失败后）")
 					return
 				default:
 				}
 
-				// 增加退避时间（指数退避）
+				// 指数退避
 				backoff = time.Duration(math.Min(
 					float64(backoff*2),
 					float64(c.config.MaxBackoff),
 				))
 
-				// 重连失败，继续尝试
+				// 继续重连
 				c.notifyDisconnect()
 			} else {
 				// 重连成功
-				c.logger.Info("Reconnected successfully", "attempt", c.reconnectAttempts.Load())
+				c.logger.Info("重连成功", "attempt", attempts)
 
-				// 重置退避时间
+				// 重置状态
 				backoff = c.config.InitialBackoff
+				c.lastErrorTypeMu.Lock()
+				c.lastErrorType = errors.ErrorTypeUnknown
+				c.lastErrorTypeMu.Unlock()
 
 				// 重启后台任务
 				c.startBackgroundTasks()
