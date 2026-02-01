@@ -10,6 +10,32 @@ import (
 	"github.com/voilet/quic-flow/pkg/protocol"
 )
 
+// DispatcherInterface 分发器接口
+// 统一的接口，支持单队列和多队列两种实现
+type DispatcherInterface interface {
+	// RegisterHandler 注册消息处理器
+	RegisterHandler(msgType protocol.MessageType, handler MessageHandler)
+
+	// UnregisterHandler 注销消息处理器
+	UnregisterHandler(msgType protocol.MessageType)
+
+	// Start 启动分发器
+	Start()
+
+	// Stop 停止分发器
+	Stop()
+
+	// Dispatch 分发消息（异步）
+	Dispatch(ctx context.Context, msg *protocol.DataMessage, responseCh chan<- *DispatchResponse) error
+
+	// DispatchSync 分发消息（同步）
+	DispatchSync(ctx context.Context, msg *protocol.DataMessage) (*protocol.DataMessage, error)
+}
+
+// 确保 Dispatcher 和 MultiQueueDispatcher 实现了接口
+var _ DispatcherInterface = (*Dispatcher)(nil)
+var _ DispatcherInterface = (*MultiQueueDispatcher)(nil)
+
 // Dispatcher 消息分发器 (T035, T036)
 // 负责将收到的消息路由到对应的 MessageHandler
 type Dispatcher struct {
@@ -257,4 +283,125 @@ func (d *Dispatcher) sendResponse(responseCh chan<- *DispatchResponse, response 
 // GetQueueLength 获取当前队列长度（监控用）
 func (d *Dispatcher) GetQueueLength() int {
 	return len(d.taskQueue)
+}
+
+// ============================================================================
+// 批量处理 API
+// ============================================================================
+
+// BatchDispatchResult 批量分发结果
+type BatchDispatchResult struct {
+	SuccessCount int      // 成功数量
+	FailedCount  int      // 失败数量
+	Responses    []*protocol.DataMessage // 响应列表（与消息一一对应）
+	Errors       []error  // 错误列表（与消息一一对应）
+}
+
+// DispatchBatch 批量分发消息（异步）
+// 将多条消息一次性提交到队列，减少队列操作开销
+func (d *Dispatcher) DispatchBatch(ctx context.Context, msgs []*protocol.DataMessage) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+
+	for _, msg := range msgs {
+		if err := d.Dispatch(ctx, msg, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DispatchBatchSync 批量分发消息（同步）
+// 等待所有消息处理完成并返回结果
+func (d *Dispatcher) DispatchBatchSync(ctx context.Context, msgs []*protocol.DataMessage) (*BatchDispatchResult, error) {
+	if len(msgs) == 0 {
+		return &BatchDispatchResult{}, nil
+	}
+
+	responseChs := make([]chan *DispatchResponse, len(msgs))
+	for i := range responseChs {
+		responseChs[i] = make(chan *DispatchResponse, 1)
+	}
+
+	// 批量分发
+	for i, msg := range msgs {
+		if err := d.Dispatch(ctx, msg, responseChs[i]); err != nil {
+			// 清理已创建的通道
+			for j := 0; j < i; j++ {
+				close(responseChs[j])
+			}
+			return nil, err
+		}
+	}
+
+	// 收集结果
+	result := &BatchDispatchResult{
+		Responses: make([]*protocol.DataMessage, len(msgs)),
+		Errors:    make([]error, len(msgs)),
+	}
+
+	for i, ch := range responseChs {
+		select {
+		case resp := <-ch:
+			if resp.Error != nil {
+				result.FailedCount++
+				result.Errors[i] = resp.Error
+			} else {
+				result.SuccessCount++
+				result.Responses[i] = resp.Response
+			}
+		case <-ctx.Done():
+			return result, ctx.Err()
+		}
+	}
+
+	return result, nil
+}
+
+// ============================================================================
+// 工厂函数 - 根据配置创建合适的分发器
+// ============================================================================
+
+// DispatcherOptions 分发器创建选项
+type DispatcherOptions struct {
+	// 是否启用多队列模式
+	EnableMultiQueue bool
+	// 多队列数量（仅在 EnableMultiQueue=true 时生效）
+	QueueCount int
+}
+
+// NewDispatcherWithConfig 根据配置创建分发器
+// 支持单队列和多队列两种模式
+func NewDispatcherWithConfig(config *DispatcherConfig, options *DispatcherOptions) DispatcherInterface {
+	if options == nil {
+		options = &DispatcherOptions{}
+	}
+
+	// 根据选项选择分发器类型
+	if options.EnableMultiQueue {
+		mqConfig := &MultiQueueConfig{
+			QueueCount: options.QueueCount,
+		}
+		return NewMultiQueueDispatcher(config, mqConfig)
+	}
+
+	// 默认使用单队列分发器
+	return NewDispatcher(config)
+}
+
+// NewDispatcherWithOptions 使用选项创建分发器（便捷方法）
+func NewDispatcherWithOptions(workerCount, queueSize int, handlerTimeout time.Duration, enableMultiQueue bool, queueCount int) DispatcherInterface {
+	config := &DispatcherConfig{
+		WorkerCount:    workerCount,
+		TaskQueueSize:  queueSize,
+		HandlerTimeout: handlerTimeout,
+	}
+
+	options := &DispatcherOptions{
+		EnableMultiQueue: enableMultiQueue,
+		QueueCount:       queueCount,
+	}
+
+	return NewDispatcherWithConfig(config, options)
 }

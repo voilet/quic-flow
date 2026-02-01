@@ -107,6 +107,10 @@ type MessageSettings struct {
 	PromiseWarnThreshold int64 `mapstructure:"promise_warn_threshold"`
 	// 默认消息超时（秒）
 	DefaultMessageTimeout int `mapstructure:"default_message_timeout"`
+	// 多队列模式
+	EnableMultiQueue bool `mapstructure:"enable_multi_queue"`
+	// 队列数量（多队列模式）
+	QueueCount int `mapstructure:"queue_count"`
 }
 
 // BatchSettings 批量执行设置
