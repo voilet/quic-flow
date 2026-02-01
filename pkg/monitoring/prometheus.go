@@ -66,6 +66,21 @@ func (h *PrometheusHandler) formatMetrics(snapshot *protocol.MetricsSnapshot) st
 	h.writeCounter(&sb, "heartbeats_received_total", "Total heartbeats received", snapshot.HeartbeatsReceived)
 	h.writeCounter(&sb, "heartbeat_timeouts_total", "Total heartbeat timeouts", snapshot.HeartbeatTimeouts)
 
+	// 重连指标
+	h.writeCounter(&sb, "reconnect_attempts_total", "Total reconnect attempts", h.metrics.ReconnectAttempts.Load())
+	h.writeCounter(&sb, "reconnect_success_total", "Total reconnect successes", h.metrics.ReconnectSuccess.Load())
+	h.writeGauge(&sb, "reconnect_current_backoff_ms", "Current backoff time in milliseconds", h.metrics.ReconnectCurrentBackoff.Load())
+
+	// 错误分类指标
+	h.writeCounter(&sb, "reconnect_error_transient_total", "Transient error count", h.metrics.ReconnectErrorTransient.Load())
+	h.writeCounter(&sb, "reconnect_error_refused_total", "Refused error count", h.metrics.ReconnectErrorRefused.Load())
+	h.writeCounter(&sb, "reconnect_error_timeout_total", "Timeout error count", h.metrics.ReconnectErrorTimeout.Load())
+	h.writeCounter(&sb, "reconnect_error_unknown_total", "Unknown error count", h.metrics.ReconnectErrorUnknown.Load())
+
+	// 心跳容错指标
+	h.writeGauge(&sb, "heartbeat_consecutive_failures", "Current consecutive heartbeat failures", h.metrics.HeartbeatConsecutiveFailures.Load())
+	h.writeCounter(&sb, "heartbeat_recovered_total", "Total heartbeat recoveries", h.metrics.HeartbeatRecoveredCount.Load())
+
 	// Promise 指标
 	h.writeCounter(&sb, "promise_created_total", "Total promises created", snapshot.PromiseCreated)
 	h.writeCounter(&sb, "promise_completed_total", "Total promises completed", snapshot.PromiseCompleted)

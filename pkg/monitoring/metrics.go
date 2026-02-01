@@ -27,6 +27,21 @@ type Metrics struct {
 	HeartbeatsReceived atomic.Int64 // 接收的心跳数
 	HeartbeatTimeouts atomic.Int64 // 心跳超时次数
 
+	// 重连相关指标
+	ReconnectAttempts      atomic.Int64 // 重连尝试次数
+	ReconnectSuccess       atomic.Int64 // 重连成功次数
+	ReconnectCurrentBackoff atomic.Int64 // 当前退避时间（毫秒）
+
+	// 错误分类指标
+	ReconnectErrorTransient atomic.Int64 // 瞬时错误次数
+	ReconnectErrorRefused   atomic.Int64 // 拒绝错误次数
+	ReconnectErrorTimeout  atomic.Int64 // 超时错误次数
+	ReconnectErrorUnknown  atomic.Int64 // 未知错误次数
+
+	// 心跳容错指标
+	HeartbeatConsecutiveFailures atomic.Int64 // 当前连续失败次数
+	HeartbeatRecoveredCount     atomic.Int64 // 心跳恢复次数
+
 	// 回调相关指标
 	PromiseCreated   atomic.Int64 // 创建的 Promise 数量
 	PromiseCompleted atomic.Int64 // 完成的 Promise 数量
@@ -233,4 +248,34 @@ func formatMetricsSnapshot(s *protocol.MetricsSnapshot) string {
 		s.AverageLatency,
 		s.P99Latency,
 	)
+}
+
+// RecordReconnectAttempt 记录重连尝试
+func (m *Metrics) RecordReconnectAttempt() {
+	m.ReconnectAttempts.Add(1)
+}
+
+// RecordReconnectSuccess 记录重连成功
+func (m *Metrics) RecordReconnectSuccess(backoffMs int64) {
+	m.ReconnectSuccess.Add(1)
+	m.ReconnectCurrentBackoff.Store(0)
+}
+
+// RecordReconnectError 记录重连错误
+func (m *Metrics) RecordReconnectError(errorType string) {
+	switch errorType {
+	case "Transient":
+		m.ReconnectErrorTransient.Add(1)
+	case "Refused":
+		m.ReconnectErrorRefused.Add(1)
+	case "Timeout":
+		m.ReconnectErrorTimeout.Add(1)
+	default:
+		m.ReconnectErrorUnknown.Add(1)
+	}
+}
+
+// RecordHeartbeatRecovered 记录心跳恢复
+func (m *Metrics) RecordHeartbeatRecovered() {
+	m.HeartbeatRecoveredCount.Add(1)
 }
