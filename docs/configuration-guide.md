@@ -204,12 +204,34 @@ if err := srv.Start(config.ListenAddr); err != nil {
 | `InitialBackoff` | time.Duration | 1s | 首次重试延迟时间 |
 | `MaxBackoff` | time.Duration | 60s | 最大重试延迟时间 |
 
+#### 重连抖动配置
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `EnableJitter` | bool | true | 是否启用抖动（强烈推荐） |
+| `JitterRatio` | float64 | 0.25 | 抖动比例，±25% |
+
+**抖动作用**: 防止多客户端同时断线时产生重连风暴，在退避时间上添加随机化。
+
+**抖动公式**: `wait_time = backoff + backoff * ratio * (2 * rand - 1)`
+
+**示例**:
+- `backoff = 2s`, `ratio = 0.25` → `wait_time ∈ [1.5s, 2.5s]`
+- `backoff = 10s`, `ratio = 0.25` → `wait_time ∈ [7.5s, 12.5s]`
+
 #### 心跳配置
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `HeartbeatInterval` | time.Duration | 15s | 心跳间隔时间 |
 | `HeartbeatTimeout` | time.Duration | 5s | 心跳响应超时时间 |
+| `MaxHeartbeatFailures` | int32 | 1 | 最大允许失败次数 |
+
+**心跳容错机制**: 允许连续多次心跳失败后再触发重连，避免因瞬时网络抖动导致不必要的重连。
+
+- `MaxHeartbeatFailures = 1`: 单次心跳失败即触发重连（默认，保持现有行为）
+- `MaxHeartbeatFailures = 3`: 允许连续 2 次失败，第 3 次才触发重连
+- 心跳成功后自动重置失败计数
 
 #### 消息配置
 
