@@ -23,32 +23,32 @@ type Metrics struct {
 	BytesReceived    atomic.Int64 // 接收的字节总数
 
 	// 心跳相关指标
-	HeartbeatsSent    atomic.Int64 // 发送的心跳数
+	HeartbeatsSent     atomic.Int64 // 发送的心跳数
 	HeartbeatsReceived atomic.Int64 // 接收的心跳数
-	HeartbeatTimeouts atomic.Int64 // 心跳超时次数
+	HeartbeatTimeouts  atomic.Int64 // 心跳超时次数
 
 	// 重连相关指标
-	ReconnectAttempts      atomic.Int64 // 重连尝试次数
-	ReconnectSuccess       atomic.Int64 // 重连成功次数
+	ReconnectAttempts       atomic.Int64 // 重连尝试次数
+	ReconnectSuccess        atomic.Int64 // 重连成功次数
 	ReconnectCurrentBackoff atomic.Int64 // 当前退避时间（毫秒）
 
 	// 错误分类指标
 	ReconnectErrorTransient atomic.Int64 // 瞬时错误次数
 	ReconnectErrorRefused   atomic.Int64 // 拒绝错误次数
-	ReconnectErrorTimeout  atomic.Int64 // 超时错误次数
-	ReconnectErrorUnknown  atomic.Int64 // 未知错误次数
+	ReconnectErrorTimeout   atomic.Int64 // 超时错误次数
+	ReconnectErrorUnknown   atomic.Int64 // 未知错误次数
 
 	// 心跳容错指标
 	HeartbeatConsecutiveFailures atomic.Int64 // 当前连续失败次数
-	HeartbeatRecoveredCount     atomic.Int64 // 心跳恢复次数
+	HeartbeatRecoveredCount      atomic.Int64 // 心跳恢复次数
 
 	// 回调相关指标
-	PromiseCreated   atomic.Int64 // 创建的 Promise 数量
-	PromiseCompleted atomic.Int64 // 完成的 Promise 数量
-	PromiseTimeouts  atomic.Int64 // 超时的 Promise 数量
-	PromiseRejections atomic.Int64 // 因容量满被拒绝的 Promise 数量
+	PromiseCreated       atomic.Int64 // 创建的 Promise 数量
+	PromiseCompleted     atomic.Int64 // 完成的 Promise 数量
+	PromiseTimeouts      atomic.Int64 // 超时的 Promise 数量
+	PromiseRejections    atomic.Int64 // 因容量满被拒绝的 Promise 数量
 	PromiseWarnTriggered atomic.Int64 // Promise 容量警告触发次数
-	PromiseCleanups  atomic.Int64 // Promise 清理次数
+	PromiseCleanups      atomic.Int64 // Promise 清理次数
 
 	// 广播相关指标
 	BroadcastsSent   atomic.Int64 // 广播消息次数
@@ -182,11 +182,11 @@ func (m *Metrics) GetSnapshot() *protocol.MetricsSnapshot {
 		TotalDisconnects: m.TotalDisconnects.Load(),
 
 		// 消息指标
-		MessagesSent:     m.MessagesSent.Load(),
-		MessagesReceived: m.MessagesReceived.Load(),
-		MessagesFailed:   m.MessagesFailed.Load(),
-		BytesSent:        m.BytesSent.Load(),
-		BytesReceived:    m.BytesReceived.Load(),
+		MessagesSent:      m.MessagesSent.Load(),
+		MessagesReceived:  m.MessagesReceived.Load(),
+		MessagesFailed:    m.MessagesFailed.Load(),
+		BytesSent:         m.BytesSent.Load(),
+		BytesReceived:     m.BytesReceived.Load(),
 		MessageThroughput: throughput,
 
 		// 延迟指标

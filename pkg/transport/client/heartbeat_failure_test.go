@@ -11,10 +11,10 @@ import (
 // TestHeartbeatFailureAccumulation 测试心跳失败累积机制
 func TestHeartbeatFailureAccumulation(t *testing.T) {
 	tests := []struct {
-		name                  string
-		maxFailures           int32
-		failToTrigger         int32 // 触发重连需要的失败次数
-		description           string
+		name          string
+		maxFailures   int32
+		failToTrigger int32 // 触发重连需要的失败次数
+		description   string
 	}{
 		{
 			name:          "默认行为-单次失败触发",

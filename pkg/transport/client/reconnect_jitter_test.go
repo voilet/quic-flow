@@ -70,39 +70,39 @@ func TestJitterCalculation(t *testing.T) {
 // TestJitterRatioLimits 测试不同抖动比例
 func TestJitterRatioLimits(t *testing.T) {
 	tests := []struct {
-		name         string
-		backoff      time.Duration
-		jitterRatio  float64
-		expectedMin  time.Duration
-		expectedMax  time.Duration
+		name        string
+		backoff     time.Duration
+		jitterRatio float64
+		expectedMin time.Duration
+		expectedMax time.Duration
 	}{
 		{
-			name:         "25% 抖动",
-			backoff:      1 * time.Second,
-			jitterRatio:  0.25,
-			expectedMin:  750 * time.Millisecond,
-			expectedMax:  1250 * time.Millisecond,
+			name:        "25% 抖动",
+			backoff:     1 * time.Second,
+			jitterRatio: 0.25,
+			expectedMin: 750 * time.Millisecond,
+			expectedMax: 1250 * time.Millisecond,
 		},
 		{
-			name:         "50% 抖动",
-			backoff:      1 * time.Second,
-			jitterRatio:  0.50,
-			expectedMin:  500 * time.Millisecond,
-			expectedMax:  1500 * time.Millisecond,
+			name:        "50% 抖动",
+			backoff:     1 * time.Second,
+			jitterRatio: 0.50,
+			expectedMin: 500 * time.Millisecond,
+			expectedMax: 1500 * time.Millisecond,
 		},
 		{
-			name:         "10% 抖动",
-			backoff:      5 * time.Second,
-			jitterRatio:  0.10,
-			expectedMin:  4500 * time.Millisecond,
-			expectedMax:  5500 * time.Millisecond,
+			name:        "10% 抖动",
+			backoff:     5 * time.Second,
+			jitterRatio: 0.10,
+			expectedMin: 4500 * time.Millisecond,
+			expectedMax: 5500 * time.Millisecond,
 		},
 		{
-			name:         "0% 抖动（禁用）",
-			backoff:      1 * time.Second,
-			jitterRatio:  0.0,
-			expectedMin:  1000 * time.Millisecond,
-			expectedMax:  1000 * time.Millisecond,
+			name:        "0% 抖动（禁用）",
+			backoff:     1 * time.Second,
+			jitterRatio: 0.0,
+			expectedMin: 1000 * time.Millisecond,
+			expectedMax: 1000 * time.Millisecond,
 		},
 	}
 

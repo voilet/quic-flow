@@ -9,14 +9,14 @@ import (
 // DispatcherMetrics Dispatcher 分发器专用指标
 type DispatcherMetrics struct {
 	// 队列指标
-	QueueLength      atomic.Int64 // 当前队列长度
-	MaxQueueLength   atomic.Int64 // 最大队列长度（窗口内）
-	QueueFullCount   atomic.Int64 // 队列满次数
+	QueueLength    atomic.Int64 // 当前队列长度
+	MaxQueueLength atomic.Int64 // 最大队列长度（窗口内）
+	QueueFullCount atomic.Int64 // 队列满次数
 
 	// 处理指标
-	TasksProcessed   atomic.Int64 // 处理的任务总数
-	TasksFailed      atomic.Int64 // 处理失败的任务数
-	BatchProcessed   atomic.Int64 // 批量处理的任务数
+	TasksProcessed atomic.Int64 // 处理的任务总数
+	TasksFailed    atomic.Int64 // 处理失败的任务数
+	BatchProcessed atomic.Int64 // 批量处理的任务数
 
 	// 延迟指标
 	ProcessingHistogram *Histogram // 处理延迟分布
@@ -27,7 +27,7 @@ type DispatcherMetrics struct {
 	MaxQueueLengthMQ atomic.Int64 // 最大队列长度（多队列）
 
 	// 时间窗口
-	windowStartTime atomic.Value // time.Time - 窗口开始时间
+	windowStartTime atomic.Value  // time.Time - 窗口开始时间
 	windowDuration  time.Duration // 窗口大小
 	mu              sync.RWMutex
 }
@@ -165,10 +165,10 @@ type DispatcherMetricsSnapshot struct {
 // SessionManagerMetrics SessionManager 会话管理器专用指标
 type SessionManagerMetrics struct {
 	// 会话指标
-	SessionCount     atomic.Int64 // 当前会话数
-	TotalSessions    atomic.Int64 // 总会话数（累计）
-	SessionsAdded    atomic.Int64 // 新增会话数（窗口内）
-	SessionsRemoved  atomic.Int64 // 移除会话数（窗口内）
+	SessionCount    atomic.Int64 // 当前会话数
+	TotalSessions   atomic.Int64 // 总会话数（累计）
+	SessionsAdded   atomic.Int64 // 新增会话数（窗口内）
+	SessionsRemoved atomic.Int64 // 移除会话数（窗口内）
 
 	// 心跳指标
 	HeartbeatChecks     atomic.Int64 // 心跳检查次数
@@ -176,10 +176,10 @@ type SessionManagerMetrics struct {
 	HeartbeatRecoveries atomic.Int64 // 心跳恢复次数
 
 	// 分片指标（仅用于 ShardedSessionManager）
-	ShardCount     atomic.Int64 // 分片数量
-	MinShardSize   atomic.Int64 // 最小分片大小
-	MaxShardSize   atomic.Int64 // 最大分片大小
-	AvgShardSize   atomic.Int64 // 平均分片大小（x100）
+	ShardCount   atomic.Int64 // 分片数量
+	MinShardSize atomic.Int64 // 最小分片大小
+	MaxShardSize atomic.Int64 // 最大分片大小
+	AvgShardSize atomic.Int64 // 平均分片大小（x100）
 
 	// 时间窗口
 	windowStartTime atomic.Value
@@ -248,10 +248,10 @@ func (sm *SessionManagerMetrics) GetSnapshot() *SessionManagerMetricsSnapshot {
 		HeartbeatRecoveries: sm.HeartbeatRecoveries.Load(),
 
 		// 分片指标
-		ShardCount:     sm.ShardCount.Load(),
-		MinShardSize:   sm.MinShardSize.Load(),
-		MaxShardSize:   sm.MaxShardSize.Load(),
-		AvgShardSize:   float64(avgSize) / 100,
+		ShardCount:   sm.ShardCount.Load(),
+		MinShardSize: sm.MinShardSize.Load(),
+		MaxShardSize: sm.MaxShardSize.Load(),
+		AvgShardSize: float64(avgSize) / 100,
 
 		// 时间指标
 		WindowStartTime: windowStart,

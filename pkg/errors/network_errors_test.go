@@ -148,8 +148,8 @@ func TestShouldReconnect(t *testing.T) {
 // TestGetBackoffMultiplier 测试退避时间倍数
 func TestGetBackoffMultiplier(t *testing.T) {
 	tests := []struct {
-		name              string
-		err               error
+		name               string
+		err                error
 		expectedMultiplier float64
 	}{
 		{"Transient error - 快速重试", io.EOF, 1.0},

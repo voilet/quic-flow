@@ -67,9 +67,9 @@ func NewDefaultClientConfig(clientID string) *ClientConfig {
 		MaxIdleTimeout:                 60 * time.Second,
 		MaxIncomingStreams:             1000,
 		MaxIncomingUniStreams:          100,
-		InitialStreamReceiveWindow:     512 * 1024,      // 512KB
-		MaxStreamReceiveWindow:         6 * 1024 * 1024, // 6MB
-		InitialConnectionReceiveWindow: 1024 * 1024,     // 1MB
+		InitialStreamReceiveWindow:     512 * 1024,       // 512KB
+		MaxStreamReceiveWindow:         6 * 1024 * 1024,  // 6MB
+		InitialConnectionReceiveWindow: 1024 * 1024,      // 1MB
 		MaxConnectionReceiveWindow:     15 * 1024 * 1024, // 15MB
 
 		// 重连默认值

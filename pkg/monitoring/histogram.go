@@ -138,13 +138,13 @@ func (h *Histogram) Reset() {
 
 // Snapshot 获取当前直方图的快照
 type HistogramSnapshot struct {
-	Count        int64     // 样本总数
-	Sum          int64     // 总延迟（毫秒）
-	Mean         int64     // 平均延迟（毫秒）
-	P50          int64     // P50 延迟（毫秒）
-	P95          int64     // P95 延迟（毫秒）
-	P99          int64     // P99 延迟（毫秒）
-	BucketCounts [5]int64  // 各桶计数
+	Count        int64    // 样本总数
+	Sum          int64    // 总延迟（毫秒）
+	Mean         int64    // 平均延迟（毫秒）
+	P50          int64    // P50 延迟（毫秒）
+	P95          int64    // P95 延迟（毫秒）
+	P99          int64    // P99 延迟（毫秒）
+	BucketCounts [5]int64 // 各桶计数
 }
 
 // GetSnapshot 获取直方图快照
