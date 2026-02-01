@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,7 +13,7 @@ import (
 	"github.com/quic-go/quic-go"
 
 	"github.com/voilet/quic-flow/pkg/dispatcher"
-	pkgerrors "github.com/voilet/quic-flow/pkg/errors"
+	"github.com/voilet/quic-flow/pkg/errors"
 	"github.com/voilet/quic-flow/pkg/monitoring"
 	"github.com/voilet/quic-flow/pkg/protocol"
 	"github.com/voilet/quic-flow/pkg/transport/codec"
@@ -52,8 +53,16 @@ type Client struct {
 	// 重连
 	reconnectAttempts atomic.Int32 // 重连尝试次数
 
+	// 抖动随机数生成器（每个客户端独立）
+	jitterRNG *rand.Rand
+
+	// 上次错误类型（用于调整退避）
+	lastErrorType   errors.NetworkErrorType
+	lastErrorTypeMu sync.RWMutex
+
 	// 心跳
-	lastPongTime atomic.Value // time.Time - 最后收到 Pong 的时间
+	lastPongTime      atomic.Value // time.Time - 最后收到 Pong 的时间
+	heartbeatFailures atomic.Int32 // 心跳失败计数
 
 	// SSH 处理器
 	sshHandler SSHStreamHandler
@@ -74,7 +83,7 @@ func (c *Client) SetSSHHandler(handler SSHStreamHandler) {
 // NewClient 创建新的客户端实例 (T027)
 func NewClient(config *ClientConfig) (*Client, error) {
 	if config == nil {
-		return nil, fmt.Errorf("%w: config is nil", pkgerrors.ErrInvalidConfig)
+		return nil, fmt.Errorf("%w: config is nil", errors.ErrInvalidConfig)
 	}
 
 	// 验证配置
@@ -105,6 +114,7 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		ctx:          ctx,
 		cancel:       cancel,
 		disconnectCh: make(chan struct{}, 1), // 缓冲区大小为1，确保重连信号不会丢失
+		jitterRNG:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	// 初始化状态
