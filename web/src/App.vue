@@ -122,6 +122,54 @@
           </el-menu-item>
         </el-sub-menu>
 
+        <!-- 告警系统 -->
+        <el-sub-menu index="alert">
+          <template #title>
+            <el-icon><Warning /></el-icon>
+            <span>告警系统</span>
+          </template>
+          <el-menu-item index="/alerts">
+            <el-icon><Bell /></el-icon>
+            <span>告警列表</span>
+          </el-menu-item>
+          <el-menu-item index="/alert-rules">
+            <el-icon><Document /></el-icon>
+            <span>告警规则</span>
+          </el-menu-item>
+          <el-menu-item index="/alert-channels">
+            <el-icon><Connection /></el-icon>
+            <span>通知渠道</span>
+          </el-menu-item>
+          <el-menu-item index="/silence-rules">
+            <el-icon><MuteNotification /></el-icon>
+            <span>抑制规则</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 配置中心 -->
+        <el-sub-menu index="config">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>配置中心</span>
+          </template>
+          <el-menu-item index="/config">
+            <el-icon><Files /></el-icon>
+            <span>配置管理</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 流水线管理 -->
+        <el-sub-menu index="pipeline">
+          <template #title>
+            <el-icon><Operation /></el-icon>
+            <span>流水线</span>
+          </template>
+          <el-menu-item index="/pipeline">
+            <el-icon><List /></el-icon>
+            <span>流水线列表</span>
+          </el-menu-item>
+        </el-sub-menu>
+
         <!-- 系统工具 -->
         <el-sub-menu index="tools">
           <template #title>
@@ -214,7 +262,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   User, ArrowDown, Message, SwitchButton, TrendCharts, Files, Bell, Clock, Key, Connection,
-  Monitor, DocumentAdd, Document, List, VideoCamera, Upload, Setting, Platform, Lock, Timer
+  Monitor, DocumentAdd, Document, List, VideoCamera, Upload, Setting, Platform, Lock, Timer,
+  Warning, MuteNotification, Operation
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { request } from '@/api'
@@ -259,6 +308,14 @@ const pageTitle = computed(() => {
     '/task': '任务管理',
     '/task/execution': '执行记录',
     '/task/group': '分组管理',
+    '/alerts': '告警列表',
+    '/alert-rules': '告警规则',
+    '/alert-channels': '通知渠道',
+    '/silence-rules': '抑制规则',
+    '/config': '配置中心',
+    '/pipeline': '流水线管理',
+    '/pipeline/editor': '流水线编辑器',
+    '/pipeline/execute': '流水线执行',
     '/setup': '数据库设置',
     '/users': '用户管理'
   }
