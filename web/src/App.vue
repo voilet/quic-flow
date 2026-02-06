@@ -5,186 +5,245 @@
   <!-- 主应用布局 -->
   <el-container v-else class="app-container">
     <!-- 侧边栏 -->
-    <el-aside width="240px" class="app-aside">
+    <el-aside width="260px" class="app-aside">
       <div class="logo">
-        <h2>PantheonQuic</h2>
+        <h2>QUIC Flow</h2>
       </div>
+
+      <!-- 项目选择器 -->
+      <div class="project-selector" v-if="!isProjectRoute">
+        <el-select
+          v-model="selectedProjectId"
+          placeholder="选择项目进入工作台"
+          @change="goToProject"
+          style="width: 100%"
+          size="large"
+        >
+          <el-option
+            v-for="project in projects"
+            :key="project.id"
+            :label="project.name"
+            :value="project.id"
+          >
+            <div class="project-option">
+              <span class="project-name">{{ project.name }}</span>
+              <el-tag size="small" :type="getProjectTypeTag(project.type)">
+                {{ getProjectTypeLabel(project.type) }}
+              </el-tag>
+            </div>
+          </el-option>
+          <template #footer>
+            <el-button text @click="showCreateProject" style="width: 100%">
+              <el-icon><Plus /></el-icon>
+              创建新项目
+            </el-button>
+          </template>
+        </el-select>
+      </div>
+
+      <!-- 项目内导航 -->
+      <div class="project-nav" v-if="isProjectRoute">
+        <div class="current-project">
+          <el-button text @click="backToProjects">
+            <el-icon><ArrowLeft /></el-icon>
+          </el-button>
+          <span class="project-name">{{ currentProject?.name }}</span>
+          <el-dropdown @command="handleProjectAction">
+            <el-icon class="more-icon"><MoreFilled /></el-icon>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="settings">项目设置</el-dropdown-item>
+                <el-dropdown-item command="members">成员管理</el-dropdown-item>
+                <el-dropdown-item command="exit" divided>退出项目</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </div>
+
       <el-menu
         :default-active="$route.path"
         router
         class="el-menu-vertical"
       >
-        <!-- 客户端管理 -->
-        <el-sub-menu index="client">
-          <template #title>
-            <el-icon><Monitor /></el-icon>
-            <span>客户端管理</span>
-          </template>
-          <el-menu-item index="/">
-            <el-icon><Platform /></el-icon>
-            <span>客户端列表</span>
+        <!-- 项目路由：显示项目内功能 -->
+        <template v-if="isProjectRoute">
+          <el-menu-item index="/project/overview">
+            <el-icon><DataBoard /></el-icon>
+            <span>项目概览</span>
           </el-menu-item>
-          <el-menu-item index="/terminal">
-            <el-icon><Monitor /></el-icon>
-            <span>SSH 终端</span>
-          </el-menu-item>
-        </el-sub-menu>
 
-        <!-- 命令管理 -->
-        <el-sub-menu index="command">
-          <template #title>
-            <el-icon><DocumentAdd /></el-icon>
-            <span>命令管理</span>
-          </template>
-          <el-menu-item index="/command">
-            <el-icon><DocumentAdd /></el-icon>
-            <span>命令下发</span>
-          </el-menu-item>
-          <el-menu-item index="/history">
-            <el-icon><Document /></el-icon>
-            <span>命令历史</span>
-          </el-menu-item>
-          <el-menu-item index="/audit">
-            <el-icon><List /></el-icon>
-            <span>命令审计</span>
-          </el-menu-item>
-          <el-menu-item index="/recordings">
-            <el-icon><VideoCamera /></el-icon>
-            <span>会话录像</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="config">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span>配置中心</span>
+            </template>
+            <el-menu-item index="/project/config">
+              <el-icon><Files /></el-icon>
+              <span>配置管理</span>
+            </el-menu-item>
+            <el-menu-item index="/project/config/history">
+              <el-icon><Clock /></el-icon>
+              <span>变更历史</span>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 发布管理 -->
-        <el-sub-menu index="release">
-          <template #title>
-            <el-icon><Upload /></el-icon>
-            <span>发布管理</span>
-          </template>
-          <el-menu-item index="/release">
-            <el-icon><Platform /></el-icon>
-            <span>项目列表</span>
-          </el-menu-item>
-          <el-menu-item index="/credentials">
-            <el-icon><Key /></el-icon>
-            <span>凭证中心</span>
-          </el-menu-item>
-          <el-menu-item index="/webhooks">
-            <el-icon><Connection /></el-icon>
-            <span>Webhook 配置</span>
-          </el-menu-item>
-          <el-menu-item index="/trigger-history">
-            <el-icon><Clock /></el-icon>
-            <span>触发历史</span>
-          </el-menu-item>
-          <el-menu-item index="/callback-config">
-            <el-icon><Bell /></el-icon>
-            <span>回调配置</span>
-          </el-menu-item>
-          <el-menu-item index="/callback-history">
-            <el-icon><Clock /></el-icon>
-            <span>回调历史</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="pipeline">
+            <template #title>
+              <el-icon><Operation /></el-icon>
+              <span>流水线</span>
+            </template>
+            <el-menu-item index="/project/pipeline">
+              <el-icon><List /></el-icon>
+              <span>流水线列表</span>
+            </el-menu-item>
+            <el-menu-item index="/project/executions">
+              <el-icon><VideoPlay /></el-icon>
+              <span>执行历史</span>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 权限管理 -->
-        <el-sub-menu index="permission">
-          <template #title>
-            <el-icon><Lock /></el-icon>
-            <span>权限管理</span>
-          </template>
-          <el-menu-item index="/project-members">
-            <el-icon><User /></el-icon>
-            <span>项目成员</span>
-          </el-menu-item>
-          <el-menu-item index="/users">
-            <el-icon><User /></el-icon>
-            <span>用户管理</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="alert">
+            <template #title>
+              <el-icon><Warning /></el-icon>
+              <span>告警规则</span>
+            </template>
+            <el-menu-item index="/project/alerts">
+              <el-icon><Bell /></el-icon>
+              <span>告警列表</span>
+            </el-menu-item>
+            <el-menu-item index="/project/alert-rules">
+              <el-icon><Document /></el-icon>
+              <span>规则管理</span>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 定时任务 -->
-        <el-sub-menu index="task">
-          <template #title>
-            <el-icon><Timer /></el-icon>
-            <span>定时任务</span>
-          </template>
-          <el-menu-item index="/task">
-            <el-icon><List /></el-icon>
-            <span>任务管理</span>
-          </el-menu-item>
-          <el-menu-item index="/task/execution">
-            <el-icon><Document /></el-icon>
-            <span>执行记录</span>
-          </el-menu-item>
-          <el-menu-item index="/task/group">
-            <el-icon><User /></el-icon>
-            <span>分组管理</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="release">
+            <template #title>
+              <el-icon><Upload /></el-icon>
+              <span>发布管理</span>
+            </template>
+            <el-menu-item index="/project/versions">
+              <el-icon><PriceTag /></el-icon>
+              <span>版本管理</span>
+            </el-menu-item>
+            <el-menu-item index="/project/deployments">
+              <el-icon><Document /></el-icon>
+              <span>部署记录</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
 
-        <!-- 告警系统 -->
-        <el-sub-menu index="alert">
-          <template #title>
-            <el-icon><Warning /></el-icon>
-            <span>告警系统</span>
-          </template>
-          <el-menu-item index="/alerts">
-            <el-icon><Bell /></el-icon>
-            <span>告警列表</span>
-          </el-menu-item>
-          <el-menu-item index="/alert-rules">
-            <el-icon><Document /></el-icon>
-            <span>告警规则</span>
-          </el-menu-item>
-          <el-menu-item index="/alert-channels">
-            <el-icon><Connection /></el-icon>
-            <span>通知渠道</span>
-          </el-menu-item>
-          <el-menu-item index="/silence-rules">
-            <el-icon><MuteNotification /></el-icon>
-            <span>抑制规则</span>
-          </el-menu-item>
-        </el-sub-menu>
+        <!-- 非项目路由：显示全局功能 -->
+        <template v-else>
+          <!-- 客户端管理 -->
+          <el-sub-menu index="client">
+            <template #title>
+              <el-icon><Monitor /></el-icon>
+              <span>客户端管理</span>
+            </template>
+            <el-menu-item index="/">
+              <el-icon><Platform /></el-icon>
+              <span>客户端列表</span>
+            </el-menu-item>
+            <el-menu-item index="/terminal">
+              <el-icon><Monitor /></el-icon>
+              <span>SSH 终端</span>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 配置中心 -->
-        <el-sub-menu index="config">
-          <template #title>
-            <el-icon><Setting /></el-icon>
-            <span>配置中心</span>
-          </template>
-          <el-menu-item index="/config">
-            <el-icon><Files /></el-icon>
-            <span>配置管理</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <!-- 命令管理 -->
+          <el-sub-menu index="command">
+            <template #title>
+              <el-icon><ChatDotRound /></el-icon>
+              <span>命令管理</span>
+            </template>
+            <el-menu-item index="/command">
+              <el-icon><Promotion /></el-icon>
+              <span>命令下发</span>
+            </el-menu-item>
+            <el-menu-item index="/history">
+              <el-icon><Clock /></el-icon>
+              <span>命令历史</span>
+            </el-menu-item>
+            <el-menu-item index="/audit">
+              <el-icon><Document /></el-icon>
+              <span>命令审计</span>
+            </el-menu-item>
+            <el-menu-item index="/recordings">
+              <el-icon><VideoCamera /></el-icon>
+              <span>会话录像</span>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 流水线管理 -->
-        <el-sub-menu index="pipeline">
-          <template #title>
-            <el-icon><Operation /></el-icon>
-            <span>流水线</span>
-          </template>
-          <el-menu-item index="/pipeline">
-            <el-icon><List /></el-icon>
-            <span>流水线列表</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <!-- 全局告警中心 -->
+          <el-sub-menu index="global-alert">
+            <template #title>
+              <el-icon><Warning /></el-icon>
+              <span>告警中心</span>
+            </template>
+            <el-menu-item index="/alerts">
+              <el-icon><Bell /></el-icon>
+              <span>全部告警</span>
+            </el-menu-item>
+            <el-menu-item index="/alert-channels">
+              <el-icon><Connection /></el-icon>
+              <span>通知渠道</span>
+            </el-menu-item>
+            <el-menu-item index="/silence-rules">
+              <el-icon><MuteNotification /></el-icon>
+              <span>抑制规则</span>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 系统工具 -->
-        <el-sub-menu index="tools">
-          <template #title>
-            <el-icon><TrendCharts /></el-icon>
-            <span>系统工具</span>
-          </template>
-          <el-menu-item index="/filetransfer">
-            <el-icon><Files /></el-icon>
-            <span>文件传输</span>
-          </el-menu-item>
-          <el-menu-item index="/profiling">
-            <el-icon><TrendCharts /></el-icon>
-            <span>性能分析</span>
-          </el-menu-item>
-        </el-sub-menu>
+          <!-- 定时任务 -->
+          <el-sub-menu index="task">
+            <template #title>
+              <el-icon><Timer /></el-icon>
+              <span>定时任务</span>
+            </template>
+            <el-menu-item index="/task">
+              <el-icon><List /></el-icon>
+              <span>任务列表</span>
+            </el-menu-item>
+            <el-menu-item index="/task/execution">
+              <el-icon><VideoPlay /></el-icon>
+              <span>执行记录</span>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <!-- 系统工具 -->
+          <el-sub-menu index="tools">
+            <template #title>
+              <el-icon><Tools /></el-icon>
+              <span>系统工具</span>
+            </template>
+            <el-menu-item index="/filetransfer">
+              <el-icon><Folder /></el-icon>
+              <span>文件传输</span>
+            </el-menu-item>
+            <el-menu-item index="/profiling">
+              <el-icon><TrendCharts /></el-icon>
+              <span>性能分析</span>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <!-- 系统管理 -->
+          <el-sub-menu index="admin">
+            <template #title>
+              <el-icon><Lock /></el-icon>
+              <span>系统管理</span>
+            </template>
+            <el-menu-item index="/users">
+              <el-icon><User /></el-icon>
+              <span>用户管理</span>
+            </el-menu-item>
+            <el-menu-item index="/credentials">
+              <el-icon><Key /></el-icon>
+              <span>凭证中心</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
 
         <!-- 系统设置 -->
         <el-menu-item index="/setup" class="setup-menu-item">
@@ -257,20 +316,38 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  User, ArrowDown, Message, SwitchButton, TrendCharts, Files, Bell, Clock, Key, Connection,
-  Monitor, DocumentAdd, Document, List, VideoCamera, Upload, Setting, Platform, Lock, Timer,
-  Warning, MuteNotification, Operation
+  User, ArrowDown, ArrowLeft, Plus, MoreFilled, Tools, Folder, PriceTag, Promotion, ChatDotRound,
+  DataBoard, Warning, Bell, Clock, Connection, MuteNotification, Operation, Document, VideoPlay,
+  Monitor, Platform, List, VideoCamera, Timer, Setting, Lock, Key, TrendCharts, Files, Upload
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { request } from '@/api'
+import { api } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+
+// 项目相关
+const projects = ref([])
+const selectedProjectId = ref(null)
+const currentProject = ref(null)
+
+// 判断是否是项目路由
+const isProjectRoute = computed(() => {
+  return route.path.startsWith('/project/')
+})
+
+// 当前项目ID
+const currentProjectId = computed(() => {
+  return route.query.projectId || route.params.projectId
+})
+
+// 数据库状态
+const dbInitialized = ref(null)
 
 // 主题管理
 const theme = ref(localStorage.getItem('theme') || 'light')
@@ -285,42 +362,188 @@ function updateTheme() {
   document.documentElement.setAttribute('data-theme', theme.value)
 }
 
-// 数据库状态
-const dbInitialized = ref(null) // null=检查中, true=已初始化, false=未初始化
+// 加载项目列表
+const loadProjects = async () => {
+  try {
+    const data = await api.getProjects()
+    projects.value = data || []
+  } catch (error) {
+    console.error('Failed to load projects:', error)
+  }
+}
 
+// 进入项目
+const goToProject = (projectId) => {
+  if (projectId) {
+    router.push({
+      path: '/project/overview',
+      query: { projectId }
+    })
+  }
+}
+
+// 返回项目列表
+const backToProjects = () => {
+  router.push('/')
+}
+
+// 显示创建项目对话框
+const showCreateProject = () => {
+  ElMessageBox.prompt('请输入项目名称', '创建新项目', {
+    confirmButtonText: '创建',
+    cancelButtonText: '取消',
+    inputPattern: /.+/,
+    inputErrorMessage: '项目名称不能为空'
+  }).then(async ({ value }) => {
+    try {
+      await api.createProject({
+        name: value,
+        type: 'custom',
+        description: ''
+      })
+      ElMessage.success('项目创建成功')
+      await loadProjects()
+      // 自动进入新项目
+      const newProject = projects.value.find(p => p.name === value)
+      if (newProject) {
+        goToProject(newProject.id)
+      }
+    } catch (error) {
+      ElMessage.error(error.message || '创建失败')
+    }
+  }).catch(() => {})
+}
+
+// 项目操作
+const handleProjectAction = (command) => {
+  switch (command) {
+    case 'settings':
+      // TODO: 打开项目设置
+      ElMessage.info('项目设置功能开发中')
+      break
+    case 'members':
+      // TODO: 成员管理
+      ElMessage.info('成员管理功能开发中')
+      break
+    case 'exit':
+      backToProjects()
+      break
+  }
+}
+
+// 获取项目类型标签
+const getProjectTypeTag = (type) => {
+  const map = {
+    deploy: '',
+    operations: 'success',
+    cicd: 'warning',
+    custom: 'info'
+  }
+  return map[type] || ''
+}
+
+const getProjectTypeLabel = (type) => {
+  const map = {
+    deploy: '部署',
+    operations: '运维',
+    cicd: 'CI/CD',
+    custom: '自定义'
+  }
+  return map[type] || type
+}
+
+// 页面标题
 const pageTitle = computed(() => {
+  if (isProjectRoute.value && currentProject.value) {
+    const titles = {
+      '/project/overview': '项目概览',
+      '/project/config': '配置中心',
+      '/project/config/history': '配置历史',
+      '/project/pipeline': '流水线列表',
+      '/project/executions': '执行历史',
+      '/project/alerts': '告警列表',
+      '/project/alert-rules': '告警规则',
+      '/project/versions': '版本管理',
+      '/project/deployments': '部署记录'
+    }
+    const baseTitle = titles[route.path] || '项目工作台'
+    return `${baseTitle} - ${currentProject.value.name}`
+  }
+
   const titles = {
-    '/': '客户端列表',
+    '/': '项目工作台',
     '/command': '命令下发',
     '/history': '命令历史',
     '/terminal': 'SSH 终端',
     '/audit': '命令审计',
     '/recordings': '会话录像',
-    '/release': '发布管理',
-    '/credentials': '凭证中心',
-    '/webhooks': 'Webhook 配置',
-    '/trigger-history': '触发历史',
-    '/project-members': '项目成员',
-    '/callback-config': '回调配置',
-    '/callback-history': '回调历史',
-    '/profiling': '性能分析',
-    '/filetransfer': '文件传输',
-    '/task': '任务管理',
-    '/task/execution': '执行记录',
-    '/task/group': '分组管理',
-    '/alerts': '告警列表',
-    '/alert-rules': '告警规则',
+    '/alerts': '全部告警',
     '/alert-channels': '通知渠道',
     '/silence-rules': '抑制规则',
-    '/config': '配置中心',
-    '/pipeline': '流水线管理',
-    '/pipeline/editor': '流水线编辑器',
-    '/pipeline/execute': '流水线执行',
-    '/setup': '数据库设置',
-    '/users': '用户管理'
+    '/filetransfer': '文件传输',
+    '/task': '定时任务',
+    '/task/execution': '执行记录',
+    '/profiling': '性能分析',
+    '/users': '用户管理',
+    '/credentials': '凭证中心',
+    '/setup': '数据库设置'
   }
-  return titles[route.path] || 'Pantheon Quic　管理系统'
+  return titles[route.path] || 'QUIC Flow 管理系统'
 })
+
+// 用户操作处理
+async function handleUserCommand(command) {
+  switch (command) {
+    case 'logout':
+      try {
+        await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        await userStore.logout()
+        ElMessage.success('已退出登录')
+        router.push('/login')
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('Logout error:', error)
+        }
+      }
+      break
+  }
+}
+
+// 检查数据库状态
+async function checkDatabaseStatus() {
+  try {
+    const res = await api.request.get('/setup/status')
+    if (res.success) {
+      dbInitialized.value = res.status.initialized
+    }
+  } catch (e) {
+    dbInitialized.value = false
+  }
+}
+
+// 监听路由变化，更新当前项目
+watch(() => currentProjectId.value, async (newId) => {
+  if (newId && isProjectRoute.value) {
+    try {
+      currentProject.value = await api.getProject(newId)
+    } catch (error) {
+      console.error('Failed to load project:', error)
+    }
+  } else {
+    currentProject.value = null
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  updateTheme()
+  checkDatabaseStatus()
+  loadProjects()
+})
+</script>
 
 const dbStatus = computed(() => {
   if (dbInitialized.value === null) {
@@ -469,6 +692,50 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   transition: color 0.3s ease;
+}
+
+.project-selector {
+  padding: 16px;
+  border-bottom: 1px solid var(--tech-border);
+}
+
+.project-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.project-option .project-name {
+  flex: 1;
+}
+
+.project-nav {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--tech-border);
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.05) 0%, rgba(64, 158, 255, 0.02) 100%);
+}
+
+.current-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.current-project .project-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--tech-primary);
+  font-size: 14px;
+}
+
+.current-project .more-icon {
+  cursor: pointer;
+  opacity: 0.6;
+  padding: 4px;
+}
+
+.current-project .more-icon:hover {
+  opacity: 1;
 }
 
 .logo:hover h2 {

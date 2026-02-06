@@ -159,22 +159,70 @@ const routes = [
     meta: { title: '抑制规则' }
   },
   {
-    path: '/pipeline',
-    name: 'PipelineList',
+    path: '/',
+    name: 'ProjectWorkspace',
+    component: () => import('@/views/ProjectWorkspace.vue'),
+    meta: { title: '项目工作台' }
+  },
+  // 项目工作台路由
+  {
+    path: '/project/overview',
+    name: 'ProjectOverview',
+    component: () => import('@/views/project/Overview.vue'),
+    meta: { title: '项目概览' }
+  },
+  {
+    path: '/project/config',
+    name: 'ProjectConfig',
+    component: () => import('@/views/config/ConfigList.vue'),
+    meta: { title: '配置中心' }
+  },
+  {
+    path: '/project/config/history',
+    name: 'ProjectConfigHistory',
+    component: () => import('@/views/config/ConfigHistoryDialog.vue'),
+    meta: { title: '配置历史' }
+  },
+  {
+    path: '/project/pipeline',
+    name: 'ProjectPipeline',
     component: () => import('@/views/pipeline/List.vue'),
-    meta: { title: '流水线管理' }
+    meta: { title: '流水线列表' }
+  },
+  {
+    path: '/project/executions',
+    name: 'ProjectExecutions',
+    component: () => import('@/views/pipeline/Execute.vue'),
+    meta: { title: '执行历史' }
+  },
+  {
+    path: '/project/alerts',
+    name: 'ProjectAlerts',
+    component: () => import('@/views/AlertList.vue'),
+    meta: { title: '告警列表' }
+  },
+  {
+    path: '/project/alert-rules',
+    name: 'ProjectAlertRules',
+    component: () => import('@/views/AlertRules.vue'),
+    meta: { title: '告警规则' }
+  },
+  // 兼容旧路由
+  {
+    path: '/pipeline',
+    redirect: '/'
   },
   {
     path: '/pipeline/editor',
-    name: 'PipelineEditor',
-    component: () => import('@/views/pipeline/Editor.vue'),
-    meta: { title: '流水线编辑器' }
+    redirect: '/'
   },
   {
     path: '/pipeline/execute',
-    name: 'PipelineExecute',
-    component: () => import('@/views/pipeline/Execute.vue'),
-    meta: { title: '流水线执行' }
+    redirect: '/'
+  },
+  {
+    path: '/config',
+    redirect: '/'
   }
 ]
 

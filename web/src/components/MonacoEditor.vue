@@ -3,9 +3,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch, defineProps, defineEmits } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as monaco from 'monaco-editor'
-import { loader } from '@monaco-editor/loader'
 
 const props = defineProps({
   modelValue: {
@@ -32,23 +31,16 @@ const containerRef = ref(null)
 let editor = null
 
 // 初始化编辑器
-const initEditor = async () => {
+const initEditor = () => {
   if (!containerRef.value) return
 
-  // 配置 Monaco loader
-  loader.config({
-    paths: {
-      vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'
-    }
-  })
-
-  const monacoInstance = await loader.init()
-
-  editor = monacoInstance.editor.create(containerRef.value, {
+  editor = monaco.editor.create(containerRef.value, {
     value: props.modelValue,
     language: props.language,
     theme: 'vs',
     automaticLayout: true,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
     ...props.options
   })
 
