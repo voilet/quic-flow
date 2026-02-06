@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/voilet/quic-flow/pkg/configcenter"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -381,6 +382,13 @@ func Migrate(db *gorm.DB) error {
 	// 创建索引
 	if err := createIndexes(db, dbType); err != nil {
 		return fmt.Errorf("failed to create indexes: %w", err)
+	}
+
+	// 迁移配置中心表
+	fmt.Println("迁移配置中心表...")
+	if err := configcenter.MigrateConfigCenter(db); err != nil {
+		fmt.Printf("警告: 配置中心表迁移失败: %v\n", err)
+		// 配置中心迁移失败不中断主流程
 	}
 
 	fmt.Println("Database migration completed")

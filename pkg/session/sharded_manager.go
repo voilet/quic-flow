@@ -13,6 +13,7 @@ import (
 // ShardedSessionManager 分片会话管理器
 // 使用多个分片减少锁竞争，提升高并发场景下的性能
 // 基准测试显示比 sync.Map 快 10-20%，内存使用减少 40%
+// 集成时间轮心跳检查器，将心跳检查复杂度从 O(n) 降到 O(1)
 type ShardedSessionManager struct {
 	// 分片数组
 	shards []*sessionShard
@@ -21,8 +22,13 @@ type ShardedSessionManager struct {
 	// 原子计数器（不需要锁）
 	count atomic.Int64
 
-	// 心跳检查
-	heartbeatTick     *time.Ticker
+	// 时间轮心跳检查器
+	timeWheel *TimeWheelHeartbeatChecker
+
+	// 并行心跳检查 worker 数量
+	heartbeatWorkers int
+
+	// 心跳配置
 	heartbeatInterval time.Duration
 	heartbeatTimeout  time.Duration
 	maxTimeoutCount   int32
@@ -104,10 +110,21 @@ func NewShardedSessionManager(config ShardedManagerConfig) *ShardedSessionManage
 		heartbeatInterval: config.HeartbeatCheckInterval,
 		heartbeatTimeout:  config.HeartbeatTimeout,
 		maxTimeoutCount:   config.MaxTimeoutCount,
+		heartbeatWorkers:  config.ShardCount, // 每个分片一个 worker
 		hooks:             config.Hooks,
 		logger:            config.Logger,
 		stopCh:            make(chan struct{}),
 	}
+
+	// 创建时间轮心跳检查器
+	sm.timeWheel = NewTimeWheelHeartbeatChecker(sm, TimeWheelConfig{
+		SlotSize:         60,               // 60 秒
+		TickInterval:     1 * time.Second,  // 1 秒精度
+		HeartbeatTimeout: config.HeartbeatTimeout,
+		MaxTimeoutCount:  config.MaxTimeoutCount,
+		Hooks:            config.Hooks,
+		Logger:           config.Logger,
+	})
 
 	return sm
 }
@@ -125,26 +142,31 @@ func (sm *ShardedSessionManager) getShard(clientID string) *sessionShard {
 	return sm.shards[hash&sm.mask]
 }
 
-// Start 启动心跳检查器
+// Start 启动心跳检查器（时间轮 + 并行分片检查）
 func (sm *ShardedSessionManager) Start() {
-	sm.heartbeatTick = time.NewTicker(sm.heartbeatInterval)
-	sm.wg.Add(1)
+	// 启动时间轮心跳检查器
+	sm.timeWheel.Start()
 
-	go sm.heartbeatChecker()
+	// 为每个分片启动独立的心跳检查 worker（作为时间轮的补充）
+	for i := range sm.shards {
+		sm.wg.Add(1)
+		go sm.shardHeartbeatChecker(i)
+	}
 
 	sm.logger.Info("ShardedSessionManager started",
 		"shards", len(sm.shards),
-		"heartbeat_interval", sm.heartbeatInterval,
-		"heartbeat_timeout", sm.heartbeatTimeout)
+		"workers", sm.heartbeatWorkers,
+		"heartbeat_timeout", sm.heartbeatTimeout,
+		"timewheel_enabled", true)
 }
 
 // Stop 停止心跳检查器
 func (sm *ShardedSessionManager) Stop() {
 	close(sm.stopCh)
-	if sm.heartbeatTick != nil {
-		sm.heartbeatTick.Stop()
-	}
 	sm.wg.Wait()
+
+	// 停止时间轮
+	sm.timeWheel.Stop()
 
 	sm.logger.Info("ShardedSessionManager stopped")
 }
@@ -172,9 +194,12 @@ func (sm *ShardedSessionManager) Add(session *ClientSession) error {
 	shard.sessions[session.ClientID] = session
 	sm.count.Add(1)
 
+	// 注册到时间轮心跳检查器
+	sm.timeWheel.Register(session.ClientID)
+
 	sm.logger.Info("Session added",
 		"client_id", session.ClientID,
-		"remote_addr", session.RemoteAddr)
+		"remote_addr", session.GetRemoteAddr())
 
 	return nil
 }
@@ -197,6 +222,9 @@ func (sm *ShardedSessionManager) Remove(clientID string) error {
 
 	delete(shard.sessions, clientID)
 	sm.count.Add(-1)
+
+	// 从时间轮注销
+	sm.timeWheel.Unregister(clientID)
 
 	sm.logger.Info("Session removed",
 		"client_id", clientID,
@@ -278,8 +306,8 @@ func (sm *ShardedSessionManager) ListClientsWithDetails() []ClientInfoBrief {
 	sm.Range(func(clientID string, session *ClientSession) bool {
 		result = append(result, ClientInfoBrief{
 			ClientID:    session.ClientID,
-			RemoteAddr:  session.RemoteAddr,
-			ConnectedAt: session.ConnectedAt.UnixMilli(),
+			RemoteAddr:  session.GetRemoteAddr(),
+			ConnectedAt: session.connectedAt,
 		})
 		return true
 	})
@@ -314,8 +342,8 @@ func (sm *ShardedSessionManager) ListClientsWithDetailsPaginated(offset, limit i
 
 		result = append(result, ClientInfoBrief{
 			ClientID:    session.ClientID,
-			RemoteAddr:  session.RemoteAddr,
-			ConnectedAt: session.ConnectedAt.UnixMilli(),
+			RemoteAddr:  session.GetRemoteAddr(),
+			ConnectedAt: session.connectedAt,
 		})
 		collected++
 		return true
@@ -324,36 +352,53 @@ func (sm *ShardedSessionManager) ListClientsWithDetailsPaginated(offset, limit i
 	return result, total
 }
 
-// heartbeatChecker 心跳检查器
-func (sm *ShardedSessionManager) heartbeatChecker() {
+// shardHeartbeatChecker 单个分片的心跳检查器（并行处理）
+// Phase 3: 分片并行心跳检查
+func (sm *ShardedSessionManager) shardHeartbeatChecker(shardIdx int) {
 	defer sm.wg.Done()
 
-	sm.logger.Debug("Sharded heartbeat checker started")
+	ticker := time.NewTicker(sm.heartbeatInterval)
+	defer ticker.Stop()
+
+	shard := sm.shards[shardIdx]
+
+	sm.logger.Debug("Shard heartbeat checker started", "shard", shardIdx)
 
 	for {
 		select {
-		case <-sm.heartbeatTick.C:
-			sm.checkHeartbeats()
+		case <-ticker.C:
+			sm.checkShardHeartbeats(shard, shardIdx)
 		case <-sm.stopCh:
-			sm.logger.Debug("Sharded heartbeat checker stopped")
+			sm.logger.Debug("Shard heartbeat checker stopped", "shard", shardIdx)
 			return
 		}
 	}
 }
 
-// checkHeartbeats 检查所有会话的心跳状态
-func (sm *ShardedSessionManager) checkHeartbeats() {
+// checkShardHeartbeats 检查单个分片的心跳状态（快照读取，无锁处理）
+func (sm *ShardedSessionManager) checkShardHeartbeats(shard *sessionShard, shardIdx int) {
 	now := time.Now()
-
-	// 汇总日志，减少 I/O 开销
 	var timeoutClients []string
 	var removedClients []string
 
-	sm.Range(func(clientID string, session *ClientSession) bool {
+	// 快照读取（短暂持锁）
+	shard.RLock()
+	sessions := make([]*ClientSession, 0, len(shard.sessions))
+	clientIDs := make([]string, 0, len(shard.sessions))
+	for clientID, session := range shard.sessions {
+		sessions = append(sessions, session)
+		clientIDs = append(clientIDs, clientID)
+	}
+	shard.RUnlock()
+
+	// 无锁处理心跳检查
+	for i := range sessions {
+		session := sessions[i]
+		clientID := clientIDs[i]
+
 		lastHB := session.GetLastHeartbeat()
 		timeSinceLastHB := now.Sub(lastHB)
 
-		// 检查是否超过心跳间隔（15 秒）
 		if timeSinceLastHB > 15*time.Second {
 			timeoutCount := session.IncrementTimeoutCount()
 
@@ -361,7 +406,6 @@ func (sm *ShardedSessionManager) checkHeartbeats() {
 				timeoutClients = append(timeoutClients, clientID)
 			}
 
-			// 达到最大超时次数，清理会话
 			if timeoutCount >= sm.maxTimeoutCount {
 				if sm.hooks != nil {
 					sm.hooks.SafeOnHeartbeatTimeout(clientID)
@@ -386,16 +430,14 @@ func (sm *ShardedSessionManager) checkHeartbeats() {
 				session.ResetTimeoutCount()
 			}
 		}
+	}
 
-		return true
-	})
-
-	// 汇总记录日志
+	// 汇总日志
 	if len(timeoutClients) > 0 || len(removedClients) > 0 {
-		sm.logger.Warn("Heartbeat check summary",
+		sm.logger.Warn("Shard heartbeat check summary",
+			"shard", shardIdx,
 			"timeout_count", len(timeoutClients),
-			"removed_count", len(removedClients),
-			"total_sessions", sm.Count())
+			"removed_count", len(removedClients))
 	}
 }
 

@@ -22,6 +22,7 @@ enum MessageType {
   MESSAGE_TYPE_EVENT       = 2;  // 事件
   MESSAGE_TYPE_QUERY       = 3;  // 查询
   MESSAGE_TYPE_RESPONSE    = 4;  // 响应
+  MESSAGE_TYPE_CONFIG_PUSH = 5;  // 配置推送
 }
 
 // 确认消息
@@ -38,4 +39,30 @@ enum AckStatus {
   ACK_STATUS_SUCCESS     = 1;  // 成功
   ACK_STATUS_FAILURE     = 2;  // 失败
   ACK_STATUS_TIMEOUT     = 3;  // 超时
+}
+
+// 配置推送消息
+message ConfigPushMessage {
+  string namespace     = 1;  // 命名空间
+  string group         = 2;  // 分组
+  string data_id       = 3;  // 配置项 ID
+  string content       = 4;  // 配置内容
+  string format        = 5;  // 配置格式 (json/yaml/properties/text/xml)
+  int64  version       = 6;  // 配置版本
+  string release_id    = 7;  // 发布 ID
+  int64  released_at   = 8;  // 发布时间（Unix 毫秒）
+  map<string, string> labels = 9;  // 配置标签
+  bool   is_gray       = 10; // 是否为灰度发布
+}
+
+// 配置确认消息
+message ConfigAckMessage {
+  string namespace   = 1;  // 命名空间
+  string group       = 2;  // 分组
+  string data_id     = 3;  // 配置项 ID
+  int64  version     = 4;  // 配置版本
+  string release_id  = 5;  // 发布 ID
+  bool   success     = 6;  // 是否成功应用
+  string error_msg   = 7;  // 错误信息（如果失败）
+  int64  applied_at  = 8;  // 应用时间（Unix 毫秒）
 }

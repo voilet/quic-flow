@@ -18,7 +18,8 @@ import (
 	"github.com/voilet/quic-flow/pkg/auth/middleware"
 	"github.com/voilet/quic-flow/pkg/batch"
 	"github.com/voilet/quic-flow/pkg/command"
-	"github.com/voilet/quic-flow/pkg/config"
+	appconfig "github.com/voilet/quic-flow/pkg/config"
+	"github.com/voilet/quic-flow/pkg/configcenter"
 	"github.com/voilet/quic-flow/pkg/dispatcher"
 	"github.com/voilet/quic-flow/pkg/hardware"
 	"github.com/voilet/quic-flow/pkg/monitoring"
@@ -71,7 +72,7 @@ var genConfigCmd = &cobra.Command{
 			genConfig = "config/server.yaml"
 		}
 
-		if err := config.GenerateDefaultConfig(genConfig, highPerf); err != nil {
+		if err := appconfig.GenerateDefaultConfig(genConfig, highPerf); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to generate config: %v\n", err)
 			os.Exit(1)
 		}
@@ -106,7 +107,7 @@ func main() {
 
 func runServer(cmd *cobra.Command, args []string) {
 	// 加载配置
-	cfg, err := config.Load(configFile)
+	cfg, err := appconfig.Load(configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -346,6 +347,19 @@ func runServer(cmd *cobra.Command, args []string) {
 		logger.Info("Hardware info system disabled (database not configured)")
 	}
 
+	// ========== 配置中心功能 ==========
+	// 创建配置中心存储和 API 处理器
+	if releaseDB != nil {
+		configStore := configcenter.NewStore(releaseDB)
+		configHandler := configcenter.NewHandler(configStore)
+
+		// 注册配置中心 API 路由
+		configRouter := httpServer.GetRouter().Group("/api")
+		configHandler.RegisterRoutes(configRouter)
+
+		logger.Info("Config center API routes registered")
+	}
+
 	// ========== 性能分析功能 ==========
 	// 创建性能分析器（需要数据库存储采集记录）
 	var profilingHandler *profiling.Handler
@@ -559,7 +573,7 @@ func runServer(cmd *cobra.Command, args []string) {
 }
 
 // buildServerConfig 从配置文件构建服务器配置
-func buildServerConfig(cfg *config.ServerConfig, logger *monitoring.Logger) *server.ServerConfig {
+func buildServerConfig(cfg *appconfig.ServerConfig, logger *monitoring.Logger) *server.ServerConfig {
 	serverConfig := &server.ServerConfig{
 		TLSCertFile: cfg.TLS.CertFile,
 		TLSKeyFile:  cfg.TLS.KeyFile,
@@ -714,7 +728,7 @@ func shutdownServer(logger *monitoring.Logger, disp *dispatcher.Dispatcher, http
 }
 
 // initDatabase 初始化数据库连接
-func initDatabase(cfg *config.ServerConfig, logger *monitoring.Logger) (*gorm.DB, error) {
+func initDatabase(cfg *appconfig.ServerConfig, logger *monitoring.Logger) (*gorm.DB, error) {
 	// 确定数据库类型
 	dbType := releasemodels.DBType(cfg.Database.Type)
 	if dbType == "" {

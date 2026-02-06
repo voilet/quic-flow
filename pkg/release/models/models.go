@@ -1547,4 +1547,6 @@ var AllModels = []interface{}{
 	// 成员权限模型
 	&User{},
 	&ProjectMember{},
+	// 配置中心模型
+	// 注意：配置中心模型在 config.Models 中定义，需要在迁移时单独调用
 }

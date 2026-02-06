@@ -127,6 +127,54 @@ const routes = [
     name: 'TaskGroup',
     component: () => import('@/views/task/Group.vue'),
     meta: { title: '分组管理' }
+  },
+  {
+    path: '/config',
+    name: 'ConfigList',
+    component: () => import('@/views/ConfigList.vue'),
+    meta: { title: '配置中心' }
+  },
+  {
+    path: '/alerts',
+    name: 'AlertList',
+    component: () => import('@/views/AlertList.vue'),
+    meta: { title: '告警列表' }
+  },
+  {
+    path: '/alert-rules',
+    name: 'AlertRules',
+    component: () => import('@/views/AlertRules.vue'),
+    meta: { title: '告警规则' }
+  },
+  {
+    path: '/alert-channels',
+    name: 'AlertChannels',
+    component: () => import('@/views/AlertChannels.vue'),
+    meta: { title: '通知渠道' }
+  },
+  {
+    path: '/silence-rules',
+    name: 'SilenceRules',
+    component: () => import('@/views/SilenceRules.vue'),
+    meta: { title: '抑制规则' }
+  },
+  {
+    path: '/pipeline',
+    name: 'PipelineList',
+    component: () => import('@/views/pipeline/List.vue'),
+    meta: { title: '流水线管理' }
+  },
+  {
+    path: '/pipeline/editor',
+    name: 'PipelineEditor',
+    component: () => import('@/views/pipeline/Editor.vue'),
+    meta: { title: '流水线编辑器' }
+  },
+  {
+    path: '/pipeline/execute',
+    name: 'PipelineExecute',
+    component: () => import('@/views/pipeline/Execute.vue'),
+    meta: { title: '流水线执行' }
   }
 ]
 

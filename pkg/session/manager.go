@@ -113,7 +113,7 @@ func (sm *SessionManager) Add(session *ClientSession) error {
 
 	sm.logger.Info("Session added",
 		"client_id", session.ClientID,
-		"remote_addr", session.RemoteAddr)
+		"remote_addr", session.GetRemoteAddr())
 
 	return nil
 }
@@ -202,8 +202,8 @@ func (sm *SessionManager) ListClientsWithDetails() []ClientInfoBrief {
 		session := value.(*ClientSession)
 		result = append(result, ClientInfoBrief{
 			ClientID:    session.ClientID,
-			RemoteAddr:  session.RemoteAddr,
-			ConnectedAt: session.ConnectedAt.UnixMilli(),
+			RemoteAddr:  session.GetRemoteAddr(),
+			ConnectedAt: session.connectedAt,
 		})
 		return true
 	})
@@ -245,8 +245,8 @@ func (sm *SessionManager) ListClientsWithDetailsPaginated(offset, limit int) ([]
 		session := value.(*ClientSession)
 		result = append(result, ClientInfoBrief{
 			ClientID:    session.ClientID,
-			RemoteAddr:  session.RemoteAddr,
-			ConnectedAt: session.ConnectedAt.UnixMilli(),
+			RemoteAddr:  session.GetRemoteAddr(),
+			ConnectedAt: session.connectedAt,
 		})
 		collected++
 		return true
