@@ -322,7 +322,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   User, ArrowDown, ArrowLeft, Plus, MoreFilled, Tools, Folder, PriceTag, Promotion, ChatDotRound,
   DataBoard, Warning, Bell, Clock, Connection, MuteNotification, Operation, Document, VideoPlay,
-  Monitor, Platform, List, VideoCamera, Timer, Setting, Lock, Key, TrendCharts, Files, Upload
+  Monitor, Platform, List, VideoCamera, Timer, Setting, Lock, Key, TrendCharts, Files, Upload,
+  Message, SwitchButton
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
