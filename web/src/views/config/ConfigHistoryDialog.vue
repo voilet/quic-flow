@@ -61,7 +61,7 @@
             </div>
             <div class="header-actions">
               <el-button size="small" @click="handleViewDiff">
-                <el-icon><Comparison /></el-icon>
+                <el-icon><DocumentCopy /></el-icon>
                 对比当前版本
               </el-button>
               <el-button
@@ -129,7 +129,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Comparison, RefreshLeft } from '@element-plus/icons-vue'
+import { DocumentCopy, RefreshLeft } from '@element-plus/icons-vue'
 import { configApi } from '@/api/config'
 import dayjs from 'dayjs'
 
@@ -244,13 +244,14 @@ const loadHistory = async (reset = false) => {
     }
     const res = await configApi.listConfigHistory(props.configId, params)
     if (res.success) {
-      const items = res.data.items || []
+      // 后端返回格式: {success: true, items: [...], total: ...}
+      const items = res.items || []
       if (reset) {
         historyList.value = items
       } else {
         historyList.value.push(...items)
       }
-      total.value = res.data.total || 0
+      total.value = res.total || 0
       hasMore.value = historyList.value.length < total.value
 
       // 获取当前版本号（第一个版本）

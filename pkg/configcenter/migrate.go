@@ -2,6 +2,7 @@ package configcenter
 
 import (
 	"fmt"
+	"strings"
 	"gorm.io/gorm"
 )
 
@@ -10,8 +11,16 @@ func MigrateConfigCenter(db *gorm.DB) error {
 	fmt.Println("开始配置中心数据库迁移...")
 
 	// 自动迁移所有配置中心模型
+	// 忽略列已存在的错误（可能是在更新现有表结构）
 	if err := AutoMigrateConfig(db); err != nil {
-		return fmt.Errorf("配置中心模型迁移失败: %w", err)
+		errStr := err.Error()
+		// PostgreSQL: column "group" of relation "configs" already exists
+		// MySQL: Duplicate column name 'group'
+		if strings.Contains(errStr, "already exists") || strings.Contains(errStr, "Duplicate column") {
+			fmt.Printf("警告: 部分列已存在，跳过创建: %v\n", err)
+		} else {
+			return fmt.Errorf("配置中心模型迁移失败: %w", err)
+		}
 	}
 
 	// 创建额外索引
@@ -22,6 +31,7 @@ func MigrateConfigCenter(db *gorm.DB) error {
 	fmt.Println("配置中心数据库迁移完成")
 	return nil
 }
+
 
 // createConfigIndexes 创建配置中心额外索引
 func createConfigIndexes(db *gorm.DB) error {
@@ -35,7 +45,7 @@ func createConfigIndexes(db *gorm.DB) error {
 		indexes = []string{
 			// 配置表索引
 			`CREATE INDEX IF NOT EXISTS idx_configs_namespace ON configs(namespace)`,
-			`CREATE INDEX IF NOT EXISTS idx_configs_group ON configs(group)`,
+			`CREATE INDEX IF NOT EXISTS idx_configs_group ON configs("group")`,
 			`CREATE INDEX IF NOT EXISTS idx_configs_type ON configs(config_type)`,
 			`CREATE INDEX IF NOT EXISTS idx_configs_tags ON configs USING GIN(tags)`,
 
@@ -68,7 +78,7 @@ func createConfigIndexes(db *gorm.DB) error {
 		indexes = []string{
 			// 配置表索引
 			`CREATE INDEX IF NOT EXISTS idx_configs_namespace ON configs(namespace)`,
-			`CREATE INDEX IF NOT EXISTS idx_configs_group ON configs(group)`,
+			`CREATE INDEX IF NOT EXISTS idx_configs_group ON configs(` + "`group`" + `)`,
 			`CREATE INDEX IF NOT EXISTS idx_configs_type ON configs(config_type)`,
 
 			// 发布记录索引

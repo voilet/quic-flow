@@ -32,6 +32,7 @@ type Store interface {
 	CreateGrayRule(ctx context.Context, rule *GrayRule) error
 	GetGrayRule(ctx context.Context, id uint) (*GrayRule, error)
 	ListGrayRules(ctx context.Context, configID uint) ([]*GrayRule, error)
+	ListAllGrayRules(ctx context.Context, filter *GrayRuleFilter) ([]*GrayRule, int64, error)
 	UpdateGrayRule(ctx context.Context, rule *GrayRule) error
 	DeleteGrayRule(ctx context.Context, id uint) error
 	GetEnabledGrayRules(ctx context.Context, configID uint) ([]*GrayRule, error)
@@ -67,6 +68,21 @@ type Store interface {
 	ReleaseEditLock(ctx context.Context, configID uint, sessionID string) error
 	GetEditLock(ctx context.Context, configID uint) (*ConfigEditLock, error)
 	CleanupExpiredLocks(ctx context.Context) (int64, error)
+
+	// ========== 命名空间和标签 ==========
+	ListNamespaces(ctx context.Context) ([]string, error)
+	ListTags(ctx context.Context) ([]string, error)
+	
+	// ========== 命名空间管理 ==========
+	CreateNamespace(ctx context.Context, name, description string) error
+	DeleteNamespace(ctx context.Context, name string) error
+	NamespaceExists(ctx context.Context, name string) (bool, error)
+	
+	// ========== 分组管理 ==========
+	ListGroups(ctx context.Context, namespace string) ([]string, error)
+	CreateGroup(ctx context.Context, namespace, name, description string) error
+	DeleteGroup(ctx context.Context, namespace, name string) error
+	GroupExists(ctx context.Context, namespace, name string) (bool, error)
 }
 
 // ConfigFilter 配置查询过滤器
@@ -117,6 +133,15 @@ type ChangeLogFilter struct {
 	Limit      int
 }
 
+// GrayRuleFilter 灰度规则查询过滤器
+type GrayRuleFilter struct {
+	ConfigID  *uint
+	RuleType  RuleType
+	Enabled   *bool
+	Page      int
+	PageSize  int
+}
+
 // configStore 配置存储实现
 type configStore struct {
 	db *gorm.DB
@@ -151,7 +176,7 @@ func (s *configStore) GetConfig(ctx context.Context, id uint) (*Config, error) {
 func (s *configStore) GetConfigByKeys(ctx context.Context, namespace, group, dataID string) (*Config, error) {
 	var config Config
 	err := s.db.WithContext(ctx).
-		Where("namespace = ? AND group = ? AND data_id = ?", namespace, group, dataID).
+		Where("namespace = ? AND \"group\" = ? AND data_id = ?", namespace, group, dataID).
 		First(&config).Error
 	if err != nil {
 		return nil, err
@@ -182,7 +207,7 @@ func (s *configStore) ListConfigs(ctx context.Context, filter *ConfigFilter) ([]
 			query = query.Where("namespace = ?", filter.Namespace)
 		}
 		if filter.Group != "" {
-			query = query.Where("group = ?", filter.Group)
+			query = query.Where("\"group\" = ?", filter.Group)
 		}
 		if filter.DataID != "" {
 			query = query.Where("data_id = ?", filter.DataID)
@@ -268,7 +293,7 @@ func (s *configStore) ListReleases(ctx context.Context, filter *ReleaseFilter) (
 			query = query.Where("namespace = ?", filter.Namespace)
 		}
 		if filter.Group != "" {
-			query = query.Where("group = ?", filter.Group)
+			query = query.Where("\"group\" = ?", filter.Group)
 		}
 		if filter.DataID != "" {
 			query = query.Where("data_id = ?", filter.DataID)
@@ -349,6 +374,39 @@ func (s *configStore) ListGrayRules(ctx context.Context, configID uint) ([]*Gray
 		Order("priority DESC, created_at DESC").
 		Find(&rules).Error
 	return rules, err
+}
+
+// ListAllGrayRules 列出所有灰度规则（支持过滤和分页）
+func (s *configStore) ListAllGrayRules(ctx context.Context, filter *GrayRuleFilter) ([]*GrayRule, int64, error) {
+	var rules []*GrayRule
+	query := s.db.WithContext(ctx).Model(&GrayRule{})
+
+	// 应用过滤条件
+	if filter.ConfigID != nil && *filter.ConfigID > 0 {
+		query = query.Where("config_id = ?", *filter.ConfigID)
+	}
+	if filter.RuleType != "" {
+		query = query.Where("rule_type = ?", filter.RuleType)
+	}
+	if filter.Enabled != nil {
+		query = query.Where("enabled = ?", *filter.Enabled)
+	}
+
+	// 获取总数
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页和排序
+	offset := (filter.Page - 1) * filter.PageSize
+	err := query.
+		Order("priority DESC, created_at DESC").
+		Offset(offset).
+		Limit(filter.PageSize).
+		Find(&rules).Error
+
+	return rules, total, err
 }
 
 // UpdateGrayRule 更新灰度规则
@@ -478,7 +536,7 @@ func (s *configStore) ListChangeLogs(ctx context.Context, filter *ChangeLogFilte
 			query = query.Where("namespace = ?", filter.Namespace)
 		}
 		if filter.Group != "" {
-			query = query.Where("group = ?", filter.Group)
+			query = query.Where("\"group\" = ?", filter.Group)
 		}
 		if filter.DataID != "" {
 			query = query.Where("data_id = ?", filter.DataID)
@@ -692,4 +750,158 @@ func (s *configStore) CleanupExpiredLocks(ctx context.Context) (int64, error) {
 		Where("expires_at < ?", time.Now()).
 		Delete(&ConfigEditLock{})
 	return result.RowsAffected, result.Error
+}
+
+// ==================== 命名空间和标签实现 ====================
+
+// ListNamespaces 列出所有命名空间
+func (s *configStore) ListNamespaces(ctx context.Context) ([]string, error) {
+	var namespaces []string
+	err := s.db.WithContext(ctx).
+		Model(&Config{}).
+		Distinct("namespace").
+		Pluck("namespace", &namespaces).
+		Error
+	return namespaces, err
+}
+
+// ListTags 列出所有标签
+func (s *configStore) ListTags(ctx context.Context) ([]string, error) {
+	var configs []Config
+	err := s.db.WithContext(ctx).
+		Select("tags").
+		Where("tags IS NOT NULL AND tags != '[]'::jsonb").
+		Find(&configs).
+		Error
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集所有标签并去重
+	tagSet := make(map[string]bool)
+	for _, config := range configs {
+		for _, tag := range config.Tags {
+			if tag != "" {
+				tagSet[tag] = true
+			}
+		}
+	}
+
+	// 转换为切片
+	tags := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		tags = append(tags, tag)
+	}
+
+	return tags, nil
+}
+
+// ==================== 命名空间管理实现 ====================
+
+// CreateNamespace 创建命名空间（验证命名空间名称，命名空间会在创建配置时自动创建）
+func (s *configStore) CreateNamespace(ctx context.Context, name, description string) error {
+	// 验证命名空间名称
+	if name == "" {
+		return fmt.Errorf("命名空间名称不能为空")
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("命名空间名称长度不能超过64个字符")
+	}
+	// 命名空间名称只能包含字母、数字、下划线和连字符
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return fmt.Errorf("命名空间名称只能包含字母、数字、下划线和连字符")
+		}
+	}
+	// 命名空间会在创建配置时自动创建，这里只做验证
+	return nil
+}
+
+// DeleteNamespace 删除命名空间（检查是否有配置使用该命名空间）
+func (s *configStore) DeleteNamespace(ctx context.Context, name string) error {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&Config{}).
+		Where("namespace = ?", name).
+		Count(&count).
+		Error
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("无法删除命名空间 %s，仍有 %d 个配置在使用", name, count)
+	}
+	return nil
+}
+
+// NamespaceExists 检查命名空间是否存在
+func (s *configStore) NamespaceExists(ctx context.Context, name string) (bool, error) {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&Config{}).
+		Where("namespace = ?", name).
+		Count(&count).
+		Error
+	return count > 0, err
+}
+
+// ==================== 分组管理实现 ====================
+
+// ListGroups 列出指定命名空间下的所有分组
+func (s *configStore) ListGroups(ctx context.Context, namespace string) ([]string, error) {
+	var groups []string
+	err := s.db.WithContext(ctx).
+		Model(&Config{}).
+		Where("namespace = ?", namespace).
+		Distinct("\"group\"").
+		Pluck("\"group\"", &groups).
+		Error
+	return groups, err
+}
+
+// CreateGroup 创建分组（验证分组名称，分组会在创建配置时自动创建）
+func (s *configStore) CreateGroup(ctx context.Context, namespace, name, description string) error {
+	// 验证分组名称
+	if name == "" {
+		return fmt.Errorf("分组名称不能为空")
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("分组名称长度不能超过64个字符")
+	}
+	// 分组名称只能包含字母、数字、下划线和连字符
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return fmt.Errorf("分组名称只能包含字母、数字、下划线和连字符")
+		}
+	}
+	// 分组会在创建配置时自动创建，这里只做验证
+	return nil
+}
+
+// DeleteGroup 删除分组（检查是否有配置使用该分组）
+func (s *configStore) DeleteGroup(ctx context.Context, namespace, name string) error {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&Config{}).
+		Where("namespace = ? AND \"group\" = ?", namespace, name).
+		Count(&count).
+		Error
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("无法删除分组 %s，仍有 %d 个配置在使用", name, count)
+	}
+	return nil
+}
+
+// GroupExists 检查分组是否存在
+func (s *configStore) GroupExists(ctx context.Context, namespace, name string) (bool, error) {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&Config{}).
+		Where("namespace = ? AND \"group\" = ?", namespace, name).
+		Count(&count).
+		Error
+	return count > 0, err
 }

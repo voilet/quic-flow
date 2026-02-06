@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/voilet/quic-flow/pkg/command"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/hardware"
 	"github.com/voilet/quic-flow/pkg/monitoring"
 	"github.com/voilet/quic-flow/pkg/profiling"
@@ -143,37 +144,37 @@ func (h *HTTPServer) GetAPIGroup() *gin.RouterGroup {
 // ClientDetail 客户端详情（整合设备和会话信息）
 type ClientDetail struct {
 	// === 基本信息 ===
-	ClientID  string `json:"client_id"`
-	Hostname  string `json:"hostname"`  // 主机名
-	OS        string `json:"os"`        // 操作系统
-	Arch      string `json:"arch"`      // 架构
+	ClientID string `json:"client_id"`
+	Hostname string `json:"hostname"` // 主机名
+	OS       string `json:"os"`       // 操作系统
+	Arch     string `json:"arch"`     // 架构
 
 	// === 硬件信息 ===
-	CPUModel      string  `json:"cpu_model"`       // CPU 型号
-	CPUCores      int     `json:"cpu_cores"`       // CPU 核心数
-	MemoryGB      float64 `json:"memory_gb"`       // 内存 GB
-	DiskTB        float64 `json:"disk_tb"`         // 磁盘 TB
-	PrimaryMAC    string  `json:"primary_mac"`     // 主 MAC 地址
+	CPUModel   string  `json:"cpu_model"`   // CPU 型号
+	CPUCores   int     `json:"cpu_cores"`   // CPU 核心数
+	MemoryGB   float64 `json:"memory_gb"`   // 内存 GB
+	DiskTB     float64 `json:"disk_tb"`     // 磁盘 TB
+	PrimaryMAC string  `json:"primary_mac"` // 主 MAC 地址
 
 	// === 在线状态 ===
-	Online       bool   `json:"online"`           // 是否在线
-	RemoteAddr   string `json:"remote_addr"`      // 远程地址
-	ConnectedAt  int64  `json:"connected_at"`     // 连接时间（毫秒）
-	Uptime       string `json:"uptime"`           // 在线时长
-	LastSeenAt   *int64 `json:"last_seen_at"`     // 最后在线时间
+	Online      bool   `json:"online"`       // 是否在线
+	RemoteAddr  string `json:"remote_addr"`  // 远程地址
+	ConnectedAt int64  `json:"connected_at"` // 连接时间（毫秒）
+	Uptime      string `json:"uptime"`       // 在线时长
+	LastSeenAt  *int64 `json:"last_seen_at"` // 最后在线时间
 
 	// === 状态 ===
-	Status       string `json:"status"`           // online, offline, unknown
-	FirstSeenAt  int64  `json:"first_seen_at"`    // 首次发现时间
+	Status      string `json:"status"`        // online, offline, unknown
+	FirstSeenAt int64  `json:"first_seen_at"` // 首次发现时间
 }
 
 // ListClientsResponse 客户端列表响应
 type ListClientsResponse struct {
-	Total        int64          `json:"total"`
-	OnlineCount  int64          `json:"online_count"`  // 心跳在线数量
-	Offset       int            `json:"offset,omitempty"`
-	Limit        int            `json:"limit,omitempty"`
-	Clients      []ClientDetail `json:"clients"`
+	Total       int64          `json:"total"`
+	OnlineCount int64          `json:"online_count"` // 心跳在线数量
+	Offset      int            `json:"offset,omitempty"`
+	Limit       int            `json:"limit,omitempty"`
+	Clients     []ClientDetail `json:"clients"`
 }
 
 const (
@@ -268,18 +269,18 @@ func (h *HTTPServer) handleListClients(c *gin.Context) {
 				onlineClient, hasSession := onlineClients[device.ClientID]
 
 				detail := ClientDetail{
-					ClientID:     device.ClientID,
-					Hostname:     device.Hostname,
-					OS:           device.OS,
-					Arch:         device.KernelArch,
-					CPUModel:     device.CPUModel,
-					CPUCores:     0, // 从 FullHardwareInfo 获取
-					MemoryGB:     device.MemoryTotalGB,
-					DiskTB:       device.DiskTotalTB,
-					PrimaryMAC:   device.PrimaryMAC,
-					Online:       isOnline, // 基于心跳判断
-					Status:       device.Status,
-					FirstSeenAt:  device.FirstSeenAt.UnixMilli(),
+					ClientID:    device.ClientID,
+					Hostname:    device.Hostname,
+					OS:          device.OS,
+					Arch:        device.KernelArch,
+					CPUModel:    device.CPUModel,
+					CPUCores:    0, // 从 FullHardwareInfo 获取
+					MemoryGB:    device.MemoryTotalGB,
+					DiskTB:      device.DiskTotalTB,
+					PrimaryMAC:  device.PrimaryMAC,
+					Online:      isOnline, // 基于心跳判断
+					Status:      device.Status,
+					FirstSeenAt: device.FirstSeenAt.UnixMilli(),
 				}
 
 				// 从 FullHardwareInfo 获取 CPU 核心数
@@ -359,28 +360,24 @@ func (h *HTTPServer) handleListClients(c *gin.Context) {
 	// 添加在线节点数到响应头
 	c.Header("X-Online-Count", fmt.Sprintf("%d", onlineCount))
 
-	c.JSON(http.StatusOK, response)
+	common.SuccessResp(c, response)
 }
 
 // handleGetClient 处理获取单个客户端信息请求
 func (h *HTTPServer) handleGetClient(c *gin.Context) {
 	clientID := c.Param("id")
 	if clientID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Client ID is required",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Client ID is required")
 		return
 	}
 
 	info, err := h.serverAPI.GetClientInfo(clientID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": fmt.Sprintf("Client not found: %v", err),
-		})
+		common.ErrorResp(c, common.CodeClientNotFound, "客户端不存在")
 		return
 	}
 
-	c.JSON(http.StatusOK, info)
+	common.SuccessResp(c, info)
 }
 
 // SendRequest 发送消息请求结构
@@ -402,9 +399,7 @@ type SendResponse struct {
 func (h *HTTPServer) handleSend(c *gin.Context) {
 	var req SendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid request body: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -422,9 +417,7 @@ func (h *HTTPServer) handleSend(c *gin.Context) {
 	case "":
 		// 使用默认值 command
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid message type: %s", req.Type),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, fmt.Sprintf("Invalid message type: %s", req.Type))
 		return
 	}
 
@@ -441,15 +434,13 @@ func (h *HTTPServer) handleSend(c *gin.Context) {
 
 	// 发送消息
 	if err := h.serverAPI.SendTo(req.ClientID, msg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to send message: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInternalError, fmt.Sprintf("Failed to send message: %v", err))
 		return
 	}
 
 	h.logger.Info("Message sent via API", "client_id", req.ClientID, "msg_id", msg.MsgId, "type", req.Type)
 
-	c.JSON(http.StatusOK, SendResponse{
+	common.SuccessResp(c, SendResponse{
 		Success: true,
 		MsgID:   msg.MsgId,
 		Message: "Message sent successfully",
@@ -476,9 +467,7 @@ type BroadcastResponse struct {
 func (h *HTTPServer) handleBroadcast(c *gin.Context) {
 	var req BroadcastRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid request body: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -496,9 +485,7 @@ func (h *HTTPServer) handleBroadcast(c *gin.Context) {
 	case "":
 		// 使用默认值 event
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid message type: %s", req.Type),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, fmt.Sprintf("Invalid message type: %s", req.Type))
 		return
 	}
 
@@ -533,12 +520,12 @@ func (h *HTTPServer) handleBroadcast(c *gin.Context) {
 		response.Errors = errMsgs
 	}
 
-	c.JSON(http.StatusOK, response)
+	common.SuccessResp(c, response)
 }
 
 // handleHealth 健康检查
 func (h *HTTPServer) handleHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"status": "ok",
 		"time":   time.Now().Unix(),
 	})
@@ -547,17 +534,13 @@ func (h *HTTPServer) handleHealth(c *gin.Context) {
 // handleSendCommand 处理下发命令请求
 func (h *HTTPServer) handleSendCommand(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	var req command.CommandRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid request body: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -575,9 +558,7 @@ func (h *HTTPServer) handleSendCommand(c *gin.Context) {
 			"command_type", req.CommandType,
 			"error", err,
 		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to send command: %v", err),
-		})
+		common.ErrorResp(c, common.CodeCommandFailed, fmt.Sprintf("Failed to send command: %v", err))
 		return
 	}
 
@@ -588,7 +569,7 @@ func (h *HTTPServer) handleSendCommand(c *gin.Context) {
 		"timeout", timeout,
 	)
 
-	c.JSON(http.StatusOK, command.CommandResponse{
+	common.SuccessResp(c, command.CommandResponse{
 		Success:   true,
 		CommandID: cmd.CommandID,
 		Message:   "Command sent successfully",
@@ -598,33 +579,23 @@ func (h *HTTPServer) handleSendCommand(c *gin.Context) {
 // handleGetCommand 处理查询命令状态请求
 func (h *HTTPServer) handleGetCommand(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	commandID := c.Param("id")
 	if commandID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Command ID is required",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Command ID is required")
 		return
 	}
 
 	cmd, err := h.commandManager.GetCommand(commandID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, command.CommandStatusResponse{
-			Success: false,
-			Error:   fmt.Sprintf("Command not found: %v", err),
-		})
+		common.ErrorResp(c, common.CodeCommandNotFound, "命令不存在")
 		return
 	}
 
-	c.JSON(http.StatusOK, command.CommandStatusResponse{
-		Success: true,
-		Command: cmd,
-	})
+	common.SuccessResp(c, cmd)
 }
 
 // ListCommandsRequest 查询命令列表请求
@@ -643,51 +614,40 @@ type ListCommandsResponse struct {
 // handleListCommands 处理查询命令列表请求
 func (h *HTTPServer) handleListCommands(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	var req ListCommandsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid query parameters: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	commands := h.commandManager.ListCommands(req.ClientID, req.Status)
 
-	c.JSON(http.StatusOK, ListCommandsResponse{
-		Success:  true,
-		Total:    len(commands),
-		Commands: commands,
+	common.SuccessResp(c, gin.H{
+		"total":    len(commands),
+		"commands": commands,
 	})
 }
 
 // handleSendMultiCommand 处理多播命令请求（同时下发到多个客户端）
 func (h *HTTPServer) handleSendMultiCommand(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	var req command.MultiCommandRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid request body: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	// 验证客户端列表
 	if len(req.ClientIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "client_ids cannot be empty",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "client_ids cannot be empty")
 		return
 	}
 
@@ -712,23 +672,19 @@ func (h *HTTPServer) handleSendMultiCommand(c *gin.Context) {
 		"failed", response.FailedCount,
 	)
 
-	c.JSON(http.StatusOK, response)
+	common.SuccessResp(c, response)
 }
 
 // handleCancelMultiCommand 处理停止多播任务请求
 func (h *HTTPServer) handleCancelMultiCommand(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	taskID := c.Param("id")
 	if taskID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Task ID is required",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Task ID is required")
 		return
 	}
 
@@ -739,9 +695,7 @@ func (h *HTTPServer) handleCancelMultiCommand(c *gin.Context) {
 			"task_id", taskID,
 			"error", err,
 		)
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": fmt.Sprintf("Failed to cancel task: %v", err),
-		})
+		common.ErrorResp(c, common.CodeTaskNotFound, fmt.Sprintf("Failed to cancel task: %v", err))
 		return
 	}
 
@@ -749,10 +703,8 @@ func (h *HTTPServer) handleCancelMultiCommand(c *gin.Context) {
 		"task_id", taskID,
 	)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
+	common.SuccessResp(c, gin.H{
 		"task_id": taskID,
-		"message": "Task cancelled successfully",
 	})
 }
 
@@ -832,25 +784,19 @@ type ContainerLogsRequest struct {
 // handleContainerLogs 处理查看容器日志请求
 func (h *HTTPServer) handleContainerLogs(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	var req ContainerLogsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid request body: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	// 验证必须提供 container_id 或 container_name
 	if req.ContainerID == "" && req.ContainerName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "container_id or container_name is required",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "container_id or container_name is required")
 		return
 	}
 
@@ -866,9 +812,7 @@ func (h *HTTPServer) handleContainerLogs(c *gin.Context) {
 
 	payloadBytes, err := json.Marshal(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to marshal params: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInternalError, fmt.Sprintf("Failed to marshal params: %v", err))
 		return
 	}
 
@@ -882,9 +826,7 @@ func (h *HTTPServer) handleContainerLogs(c *gin.Context) {
 			"client_id", req.ClientID,
 			"error", err,
 		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to send command: %v", err),
-		})
+		common.ErrorResp(c, common.CodeCommandFailed, fmt.Sprintf("Failed to send command: %v", err))
 		return
 	}
 
@@ -895,7 +837,7 @@ func (h *HTTPServer) handleContainerLogs(c *gin.Context) {
 		"container_name", req.ContainerName,
 	)
 
-	c.JSON(http.StatusOK, command.CommandResponse{
+	common.SuccessResp(c, command.CommandResponse{
 		Success:   true,
 		CommandID: cmd.CommandID,
 		Message:   "Container logs command sent successfully",

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/voilet/quic-flow/pkg/audit"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/monitoring"
 	"github.com/voilet/quic-flow/pkg/recording"
 )
@@ -52,12 +53,12 @@ type PTYSessionInfo struct {
 
 // TerminalManager 终端管理器
 type TerminalManager struct {
-	sshManager      TerminalManagerAPI
-	logger          *monitoring.Logger
-	sessions        map[string]*TerminalSession
-	mu              sync.RWMutex
-	auditStore      audit.Store
-	recordingConfig *recording.Config
+	sshManager       TerminalManagerAPI
+	logger           *monitoring.Logger
+	sessions         map[string]*TerminalSession
+	mu               sync.RWMutex
+	auditStore       audit.Store
+	recordingConfig  *recording.Config
 	recordingDBStore *recording.DBStore
 }
 
@@ -120,7 +121,7 @@ func (tm *TerminalManager) SetAuditStore(store audit.Store) {
 func (tm *TerminalManager) HandleWebSocket(c *gin.Context) {
 	clientID := c.Param("client_id")
 	if clientID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "client_id is required"})
+		common.ErrorResp(c, common.CodeInvalidParams, "client_id is required")
 		return
 	}
 
@@ -388,8 +389,7 @@ func (tm *TerminalManager) GetActiveSessions() []TerminalSessionInfo {
 // HandleTerminalSessionsList 处理列出终端会话的 HTTP 请求
 func (tm *TerminalManager) HandleTerminalSessionsList(c *gin.Context) {
 	sessions := tm.ListSessions()
-	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
+	common.SuccessResp(c, gin.H{
 		"sessions": sessions,
 	})
 }
@@ -398,16 +398,16 @@ func (tm *TerminalManager) HandleTerminalSessionsList(c *gin.Context) {
 func (tm *TerminalManager) HandleTerminalSessionClose(c *gin.Context) {
 	sessionID := c.Param("session_id")
 	if sessionID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "session_id is required"})
+		common.ErrorResp(c, common.CodeInvalidParams, "session_id is required")
 		return
 	}
 
 	if err := tm.CloseSession(sessionID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		common.ErrorResp(c, common.CodeSSHTerminalNotFound, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, struct{}{})
 }
 
 // TerminalManagerAdapter 适配器：将 SSHClientManager 适配到 TerminalManagerAPI 接口

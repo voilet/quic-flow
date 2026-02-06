@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // Handler 配置中心 API 处理器
@@ -21,7 +22,42 @@ func NewHandler(store Store) *Handler {
 }
 
 // RegisterRoutes 注册路由
+// 注意：更具体的路由必须放在更通用的路由之前，避免路由冲突
 func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
+	// ========== 命名空间和标签（必须放在 /config/:id 之前）==========
+	// 注意：路由顺序很重要，更具体的路由要放在前面
+	r.GET("/config/tags", h.ListTags)
+	
+	// 命名空间路由 - 先注册具体的路由，避免与 /:namespace/groups 冲突
+	r.GET("/config/namespaces", h.ListNamespaces)
+	r.POST("/config/namespaces", h.CreateNamespace)
+	// 使用查询参数或 POST body 来删除，避免路由冲突
+	// 或者使用 /config/namespace/:name (单数形式)
+	r.DELETE("/config/namespace/:name", h.DeleteNamespace)
+	
+	// 分组路由组（使用 :namespace 参数）
+	groupGroup := r.Group("/config/namespaces/:namespace/groups")
+	{
+		groupGroup.GET("", h.ListGroups)
+		groupGroup.POST("", h.CreateGroup)
+		groupGroup.DELETE("/:name", h.DeleteGroup)
+	}
+
+	// ========== 订阅管理（必须放在 /config/:id 之前）==========
+	r.GET("/config/subscribers", h.ListSubscribers)
+	r.GET("/config/subscribers/:client_id", h.GetSubscriber)
+
+	// ========== SSE 推送（必须放在 /config/:id 之前）==========
+	r.GET("/config/release/:release_id/events", h.ReleaseEvents)
+	r.GET("/config/events", h.ConfigEvents)
+
+	// ========== 发布管理（部分路由需要放在 /config/:id 之前）==========
+	r.GET("/config/release/:release_id", h.GetReleaseStatus)
+	r.GET("/config/releases", h.ListAllReleases) // 全局发布列表（必须在 /config/:id/releases 之前，且必须在 /config/:id 之前）
+
+	// ========== 全局灰度规则（必须放在 /config/:id/gray-rules 之前）==========
+	r.GET("/config/gray-rules", h.ListAllGrayRules) // 全局灰度规则列表
+
 	// ========== 配置管理 ==========
 	r.POST("/config", h.CreateConfig)
 	r.GET("/config", h.ListConfigs)
@@ -29,10 +65,9 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	r.PUT("/config/:id", h.UpdateConfig)
 	r.DELETE("/config/:id", h.DeleteConfig)
 
-	// ========== 发布管理 ==========
+	// ========== 发布管理（配置相关的发布操作）==========
 	r.POST("/config/:id/release", h.ReleaseConfig)
-	r.GET("/config/release/:release_id", h.GetReleaseStatus)
-	r.GET("/config/:id/releases", h.ListReleases)
+	r.GET("/config/:id/releases", h.ListReleases) // 指定配置的发布历史
 
 	// ========== 灰度规则 ==========
 	r.POST("/config/:id/gray-rule", h.CreateGrayRule)
@@ -43,14 +78,6 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	// ========== 配置回滚 ==========
 	r.POST("/config/:id/rollback", h.RollbackConfig)
 	r.GET("/config/:id/diff", h.CompareConfig)
-
-	// ========== 订阅管理 ==========
-	r.GET("/config/subscribers", h.ListSubscribers)
-	r.GET("/config/subscribers/:client_id", h.GetSubscriber)
-
-	// ========== SSE 推送 ==========
-	r.GET("/config/release/:release_id/events", h.ReleaseEvents)
-	r.GET("/config/events", h.ConfigEvents)
 
 	// ========== 变更历史 ==========
 	r.GET("/config/:id/changelog", h.ListChangeLogs)
@@ -78,14 +105,15 @@ type Response struct {
 
 // CreateConfigRequest 创建配置请求
 type CreateConfigRequest struct {
-	Namespace   string                 `json:"namespace" binding:"required"`
-	Group       string                 `json:"group" binding:"required"`
-	DataID      string                 `json:"data_id" binding:"required"`
-	ConfigType  string                 `json:"config_type" binding:"required,oneof=application system"`
-	Content     string                 `json:"content" binding:"required"`
-	Format      string                 `json:"format" binding:"required,oneof=json yaml properties text xml"`
-	Description string                 `json:"description"`
-	Tags        []string               `json:"tags"`
+	Namespace   string   `json:"namespace" binding:"required"`
+	Group       string   `json:"group" binding:"required"`
+	DataID      string   `json:"data_id" binding:"required"`
+	ConfigType  string   `json:"config_type"` // application | system，如果为空则默认为 application
+	Type        string   `json:"type"`        // 兼容前端字段，映射到 Format
+	Content     string   `json:"content" binding:"required"`
+	Format      string   `json:"format"`      // json | yaml | properties | text | xml
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
 }
 
 // CreateConfig 创建配置
@@ -100,13 +128,55 @@ func (h *Handler) CreateConfig(c *gin.Context) {
 		return
 	}
 
+	// 处理字段映射：如果前端发送了 type，则映射到 format
+	format := req.Format
+	if format == "" && req.Type != "" {
+		format = req.Type
+	}
+	if format == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "format 或 type 字段不能为空",
+		})
+		return
+	}
+
+	// 验证格式
+	validFormats := map[string]bool{
+		"json":       true,
+		"yaml":       true,
+		"properties": true,
+		"text":       true,
+		"xml":        true,
+	}
+	if !validFormats[format] {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   fmt.Sprintf("不支持的格式: %s，支持的格式: json, yaml, properties, text, xml", format),
+		})
+		return
+	}
+
+	// 处理配置类型：默认为 application
+	configType := req.ConfigType
+	if configType == "" {
+		configType = "application"
+	}
+	if configType != "application" && configType != "system" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "config_type 必须是 application 或 system",
+		})
+		return
+	}
+
 	config := &Config{
 		Namespace:   req.Namespace,
 		Group:       req.Group,
 		DataID:      req.DataID,
-		ConfigType:  ConfigType(req.ConfigType),
+		ConfigType:  ConfigType(configType),
 		Content:     req.Content,
-		Format:      ConfigFormat(req.Format),
+		Format:      ConfigFormat(format),
 		Description: req.Description,
 		Tags:        StringArray(req.Tags),
 	}
@@ -121,14 +191,14 @@ func (h *Handler) CreateConfig(c *gin.Context) {
 
 	// 记录变更日志
 	_ = h.store.CreateChangeLog(c.Request.Context(), &ConfigChangeLog{
-		ConfigID:    config.ID,
-		Namespace:   config.Namespace,
-		Group:       config.Group,
-		DataID:      config.DataID,
-		ChangeType:  "create",
-		NewContent:  config.Content,
-		OperatedBy:  getUserID(c),
-		OperatedAt:  time.Now(),
+		ConfigID:   config.ID,
+		Namespace:  config.Namespace,
+		Group:      config.Group,
+		DataID:     config.DataID,
+		ChangeType: "create",
+		NewContent: config.Content,
+		OperatedBy: getUserID(c),
+		OperatedAt: time.Now(),
 	})
 
 	c.JSON(http.StatusCreated, Response{
@@ -160,13 +230,12 @@ func (h *Handler) ListConfigs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"total":   total,
-		"page":    filter.Page,
-		"page_size": filter.PageSize,
-		"items":   configs,
-	})
+	common.SuccessResp(c, gin.H{
+			"total":     total,
+			"page":      filter.Page,
+			"page_size": filter.PageSize,
+			"items":     configs,
+		})
 }
 
 // GetConfig 获取配置详情
@@ -254,15 +323,15 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 
 	// 记录变更日志
 	_ = h.store.CreateChangeLog(c.Request.Context(), &ConfigChangeLog{
-		ConfigID:    oldConfig.ID,
-		Namespace:   oldConfig.Namespace,
-		Group:       oldConfig.Group,
-		DataID:      oldConfig.DataID,
-		ChangeType:  "update",
-		OldContent:  oldConfig.Content, // 注意：这里需要保存更新前的内容
-		NewContent:  req.Content,
-		OperatedBy:  getUserID(c),
-		OperatedAt:  time.Now(),
+		ConfigID:   oldConfig.ID,
+		Namespace:  oldConfig.Namespace,
+		Group:      oldConfig.Group,
+		DataID:     oldConfig.DataID,
+		ChangeType: "update",
+		OldContent: oldConfig.Content, // 注意：这里需要保存更新前的内容
+		NewContent: req.Content,
+		OperatedBy: getUserID(c),
+		OperatedAt: time.Now(),
 	})
 
 	c.JSON(http.StatusOK, Response{
@@ -304,14 +373,14 @@ func (h *Handler) DeleteConfig(c *gin.Context) {
 
 	// 记录变更日志
 	_ = h.store.CreateChangeLog(c.Request.Context(), &ConfigChangeLog{
-		ConfigID:    config.ID,
-		Namespace:   config.Namespace,
-		Group:       config.Group,
-		DataID:      config.DataID,
-		ChangeType:  "delete",
-		OldContent:  config.Content,
-		OperatedBy:  getUserID(c),
-		OperatedAt:  time.Now(),
+		ConfigID:   config.ID,
+		Namespace:  config.Namespace,
+		Group:      config.Group,
+		DataID:     config.DataID,
+		ChangeType: "delete",
+		OldContent: config.Content,
+		OperatedBy: getUserID(c),
+		OperatedAt: time.Now(),
 	})
 
 	c.JSON(http.StatusOK, Response{
@@ -324,7 +393,7 @@ func (h *Handler) DeleteConfig(c *gin.Context) {
 
 // ReleaseConfigRequest 发布配置请求
 type ReleaseConfigRequest struct {
-	GrayRuleID *uint `json:"gray_rule_id"`
+	GrayRuleID *uint  `json:"gray_rule_id"`
 	Comment    string `json:"comment"`
 }
 
@@ -385,14 +454,14 @@ func (h *Handler) ReleaseConfig(c *gin.Context) {
 
 	// 记录变更日志
 	_ = h.store.CreateChangeLog(c.Request.Context(), &ConfigChangeLog{
-		ConfigID:    config.ID,
-		Namespace:   config.Namespace,
-		Group:       config.Group,
-		DataID:      config.DataID,
-		ChangeType:  "release",
-		NewContent:  config.Content,
-		OperatedBy:  getUserID(c),
-		OperatedAt:  time.Now(),
+		ConfigID:   config.ID,
+		Namespace:  config.Namespace,
+		Group:      config.Group,
+		DataID:     config.DataID,
+		ChangeType: "release",
+		NewContent: config.Content,
+		OperatedBy: getUserID(c),
+		OperatedAt: time.Now(),
 	})
 
 	// 异步推送配置
@@ -432,9 +501,80 @@ func (h *Handler) GetReleaseStatus(c *gin.Context) {
 	})
 }
 
+// ListAllReleases 列出所有发布记录（全局）
+// GET /api/config/releases?page=1&page_size=20&namespace=&group=&data_id=&release_type=&status=&released_by=
+func (h *Handler) ListAllReleases(c *gin.Context) {
+	// 确保这是全局发布列表路由，不是配置特定的路由
+	// 如果路径中有 :id 参数，说明路由匹配错误
+	if c.Param("id") != "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "路由匹配错误",
+		})
+		return
+	}
+
+	filter := &ReleaseFilter{
+		Namespace:   c.Query("namespace"),
+		Group:       c.Query("group"),
+		DataID:      c.Query("data_id"),
+		ReleaseType: ReleaseType(c.Query("release_type")),
+		Status:      ReleaseStatus(c.Query("status")),
+		Page:        parseIntQuery(c, "page", 1),
+		PageSize:    parseIntQuery(c, "page_size", 20),
+	}
+
+	// 如果提供了配置ID，也加入过滤条件
+	if configIDStr := c.Query("config_id"); configIDStr != "" {
+		if configID, err := strconv.ParseUint(configIDStr, 10, 32); err == nil && configID > 0 {
+			id := uint(configID)
+			filter.ConfigID = &id
+		}
+	}
+
+	// 如果提供了发布人，需要从查询参数中获取
+	if releasedBy := c.Query("released_by"); releasedBy != "" {
+		// 注意：ReleaseFilter 中没有 released_by 字段，需要在查询时添加
+		// 这里先不处理，后续可以在 store 层添加支持
+	}
+
+	releases, total, err := h.store.ListReleases(c.Request.Context(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   fmt.Sprintf("查询发布列表失败: %v", err),
+		})
+		return
+	}
+
+	common.SuccessResp(c, gin.H{
+			"total":     total,
+			"page":      filter.Page,
+			"page_size": filter.PageSize,
+			"items":     releases,
+		})
+}
+
 // ListReleases 列出配置的发布历史
 // GET /api/config/:id/releases?page=1&page_size=20
 func (h *Handler) ListReleases(c *gin.Context) {
+	idParam := c.Param("id")
+	// 检查路径参数，如果是 "releases" 字符串，说明路由匹配错误
+	// 这不应该发生，因为 /config/releases 应该在 /config/:id/releases 之前注册
+	// 但为了安全起见，添加检查：如果 id 是 "releases"，说明应该使用全局发布列表路由
+	if idParam == "releases" {
+		// 直接调用全局发布列表处理函数
+		h.ListAllReleases(c)
+		return
+	}
+	if idParam == "" {
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Error:   "请使用 /api/config/releases 获取全局发布列表",
+		})
+		return
+	}
+	
 	configID := parseUintParam(c, "id")
 	if configID == 0 {
 		c.JSON(http.StatusBadRequest, Response{
@@ -459,24 +599,23 @@ func (h *Handler) ListReleases(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"total":   total,
-		"page":    filter.Page,
-		"page_size": filter.PageSize,
-		"items":   releases,
-	})
+	common.SuccessResp(c, gin.H{
+			"total":     total,
+			"page":      filter.Page,
+			"page_size": filter.PageSize,
+			"items":     releases,
+		})
 }
 
 // ========== 灰度规则 API ==========
 
 // CreateGrayRuleRequest 创建灰度规则请求
 type CreateGrayRuleRequest struct {
-	RuleName    string  `json:"rule_name" binding:"required"`
-	RuleType    string  `json:"rule_type" binding:"required,oneof=tag ip client_id percentage"`
-	RuleValue   string  `json:"rule_value" binding:"required"`
-	Priority    int     `json:"priority"`
-	Description string  `json:"description"`
+	RuleName    string `json:"rule_name" binding:"required"`
+	RuleType    string `json:"rule_type" binding:"required,oneof=tag ip client_id percentage"`
+	RuleValue   string `json:"rule_value" binding:"required"`
+	Priority    int    `json:"priority"`
+	Description string `json:"description"`
 }
 
 // CreateGrayRule 创建灰度规则
@@ -524,6 +663,51 @@ func (h *Handler) CreateGrayRule(c *gin.Context) {
 		Message: "灰度规则创建成功",
 		Data:    rule,
 	})
+}
+
+// ListAllGrayRules 列出所有灰度规则（全局）
+// GET /api/config/gray-rules?config_id=&rule_type=&enabled=&page=1&page_size=20
+func (h *Handler) ListAllGrayRules(c *gin.Context) {
+	filter := &GrayRuleFilter{
+		RuleType: RuleType(c.Query("rule_type")),
+		Page:     parseIntQuery(c, "page", 1),
+		PageSize: parseIntQuery(c, "page_size", 20),
+	}
+
+	// 解析 config_id
+	if configIDStr := c.Query("config_id"); configIDStr != "" {
+		if configID, err := strconv.ParseUint(configIDStr, 10, 32); err == nil && configID > 0 {
+			id := uint(configID)
+			filter.ConfigID = &id
+		}
+	}
+
+	// 解析 enabled
+	if enabledStr := c.Query("enabled"); enabledStr != "" {
+		if enabledStr == "true" {
+			enabled := true
+			filter.Enabled = &enabled
+		} else if enabledStr == "false" {
+			enabled := false
+			filter.Enabled = &enabled
+		}
+	}
+
+	rules, total, err := h.store.ListAllGrayRules(c.Request.Context(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   fmt.Sprintf("查询灰度规则失败: %v", err),
+		})
+		return
+	}
+
+	common.SuccessResp(c, gin.H{
+			"total":     total,
+			"page":      filter.Page,
+			"page_size": filter.PageSize,
+			"items":     rules,
+		})
 }
 
 // ListGrayRules 列出灰度规则
@@ -655,7 +839,7 @@ func (h *Handler) DeleteGrayRule(c *gin.Context) {
 
 // RollbackConfigRequest 回滚配置请求
 type RollbackConfigRequest struct {
-	Version int `json:"version" binding:"required"`
+	Version int    `json:"version" binding:"required"`
 	Comment string `json:"comment"`
 }
 
@@ -721,16 +905,16 @@ func (h *Handler) RollbackConfig(c *gin.Context) {
 
 	// 创建回滚发布记录
 	rollbackRelease := &ConfigRelease{
-		ConfigID:           config.ID,
-		Namespace:          config.Namespace,
-		Group:              config.Group,
-		DataID:             config.DataID,
-		Content:            targetRelease.Content,
-		Version:            targetRelease.Version,
-		ReleaseType:        ReleaseTypeRollback,
-		Status:             ReleaseStatusPending,
-		ReleasedBy:         getUserID(c),
-		ReleasedAt:         time.Now(),
+		ConfigID:            config.ID,
+		Namespace:           config.Namespace,
+		Group:               config.Group,
+		DataID:              config.DataID,
+		Content:             targetRelease.Content,
+		Version:             targetRelease.Version,
+		ReleaseType:         ReleaseTypeRollback,
+		Status:              ReleaseStatusPending,
+		ReleasedBy:          getUserID(c),
+		ReleasedAt:          time.Now(),
 		RollbackFromVersion: &config.Version,
 	}
 
@@ -744,15 +928,15 @@ func (h *Handler) RollbackConfig(c *gin.Context) {
 
 	// 记录变更日志
 	_ = h.store.CreateChangeLog(c.Request.Context(), &ConfigChangeLog{
-		ConfigID:    config.ID,
-		Namespace:   config.Namespace,
-		Group:       config.Group,
-		DataID:      config.DataID,
-		ChangeType:  "rollback",
-		OldContent:  config.Content,
-		NewContent:  targetRelease.Content,
-		OperatedBy:  getUserID(c),
-		OperatedAt:  time.Now(),
+		ConfigID:   config.ID,
+		Namespace:  config.Namespace,
+		Group:      config.Group,
+		DataID:     config.DataID,
+		ChangeType: "rollback",
+		OldContent: config.Content,
+		NewContent: targetRelease.Content,
+		OperatedBy: getUserID(c),
+		OperatedAt: time.Now(),
 	})
 
 	// 异步推送配置
@@ -825,17 +1009,17 @@ func (h *Handler) CompareConfig(c *gin.Context) {
 	// 简单的 diff 结果
 	diff := gin.H{
 		"version1": gin.H{
-			"version": release1.Version,
-			"content": release1.Content,
+			"version":     release1.Version,
+			"content":     release1.Content,
 			"released_at": release1.ReleasedAt,
 		},
 		"version2": gin.H{
-			"version": release2.Version,
-			"content": release2.Content,
+			"version":     release2.Version,
+			"content":     release2.Content,
 			"released_at": release2.ReleasedAt,
 		},
 		"content_diff": gin.H{
-			"added":    "",  // 可以集成 diff 库来生成更详细的 diff
+			"added":    "", // 可以集成 diff 库来生成更详细的 diff
 			"removed":  "",
 			"modified": release1.Content != release2.Content,
 		},
@@ -869,13 +1053,12 @@ func (h *Handler) ListSubscribers(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"total":   total,
-		"page":    filter.Page,
-		"page_size": filter.PageSize,
-		"items":   subscribers,
-	})
+	common.SuccessResp(c, gin.H{
+			"total":     total,
+			"page":      filter.Page,
+			"page_size": filter.PageSize,
+			"items":     subscribers,
+		})
 }
 
 // GetSubscriber 获取订阅者详情
@@ -974,8 +1157,8 @@ func (h *Handler) ReleaseEvents(c *gin.Context) {
 
 			// 如果发布完成，关闭连接
 			if release.Status == ReleaseStatusSuccess ||
-			   release.Status == ReleaseStatusFailed ||
-			   release.Status == ReleaseStatusPartial {
+				release.Status == ReleaseStatusFailed ||
+				release.Status == ReleaseStatusPartial {
 				c.SSEvent("completed", event)
 				flusher.Flush()
 				return
@@ -1064,10 +1247,22 @@ func (h *Handler) ListChangeLogs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{
-		Success: true,
-		Data:    logs,
-	})
+	// 转换为分页格式，与前端期望一致
+	page := parseIntQuery(c, "page", 1)
+	pageSize := parseIntQuery(c, "page_size", 20)
+	if pageSize == 0 {
+		pageSize = limit
+	}
+	if pageSize == 0 {
+		pageSize = 20
+	}
+
+	common.SuccessResp(c, gin.H{
+			"items":     logs,
+			"total":     len(logs), // 注意：这里返回的是当前查询结果的数量，不是总数
+			"page":      page,
+			"page_size": pageSize,
+		})
 }
 
 // ========== 快照管理 API ==========
@@ -1105,8 +1300,8 @@ func (h *Handler) ListSnapshots(c *gin.Context) {
 
 // AcquireLockRequest 获取编辑锁请求
 type AcquireLockRequest struct {
-	SessionID string `json:"session_id" binding:"required"`
-	TTLMinutes int   `json:"ttl_minutes"`
+	SessionID  string `json:"session_id" binding:"required"`
+	TTLMinutes int    `json:"ttl_minutes"`
 }
 
 // AcquireLock 获取配置编辑锁
@@ -1268,4 +1463,220 @@ func parseUintParam(c *gin.Context, key string) uint {
 	}
 	uintVal, _ := strconv.ParseUint(val, 10, 64)
 	return uint(uintVal)
+}
+
+// ==================== 命名空间和标签 API ====================
+
+// ListNamespaces 列出所有命名空间
+// GET /api/config/namespaces
+func (h *Handler) ListNamespaces(c *gin.Context) {
+	namespaces, err := h.store.ListNamespaces(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   fmt.Sprintf("获取命名空间列表失败: %v", err),
+		})
+		return
+	}
+
+	// 转换为前端期望的格式
+	result := make([]map[string]interface{}, 0, len(namespaces))
+	for _, ns := range namespaces {
+		result = append(result, map[string]interface{}{
+			"name": ns,
+		})
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    result,
+	})
+}
+
+// ListTags 列出所有标签
+// GET /api/config/tags
+func (h *Handler) ListTags(c *gin.Context) {
+	tags, err := h.store.ListTags(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   fmt.Sprintf("获取标签列表失败: %v", err),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    tags,
+	})
+}
+
+// CreateNamespaceRequest 创建命名空间请求
+type CreateNamespaceRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description"`
+}
+
+// CreateNamespace 创建命名空间
+// POST /api/config/namespaces
+func (h *Handler) CreateNamespace(c *gin.Context) {
+	var req CreateNamespaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   fmt.Sprintf("请求参数无效: %v", err),
+		})
+		return
+	}
+
+	if err := h.store.CreateNamespace(c.Request.Context(), req.Name, req.Description); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "命名空间创建成功（命名空间将在创建配置时自动创建）",
+		Data: map[string]interface{}{
+			"name":        req.Name,
+			"description": req.Description,
+		},
+	})
+}
+
+// DeleteNamespace 删除命名空间
+// DELETE /api/config/namespace/:name (使用单数形式避免路由冲突)
+func (h *Handler) DeleteNamespace(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "命名空间名称不能为空",
+		})
+		return
+	}
+
+	if err := h.store.DeleteNamespace(c.Request.Context(), name); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "命名空间删除成功",
+	})
+}
+
+// ListGroups 列出指定命名空间下的所有分组
+// GET /api/config/namespaces/:namespace/groups
+func (h *Handler) ListGroups(c *gin.Context) {
+	namespace := c.Param("namespace")
+	if namespace == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "命名空间名称不能为空",
+		})
+		return
+	}
+
+	groups, err := h.store.ListGroups(c.Request.Context(), namespace)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   fmt.Sprintf("获取分组列表失败: %v", err),
+		})
+		return
+	}
+
+	// 转换为前端期望的格式
+	result := make([]map[string]interface{}, 0, len(groups))
+	for _, group := range groups {
+		result = append(result, map[string]interface{}{
+			"name": group,
+		})
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    result,
+	})
+}
+
+// CreateGroupRequest 创建分组请求
+type CreateGroupRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description"`
+}
+
+// CreateGroup 创建分组
+// POST /api/config/namespaces/:namespace/groups
+func (h *Handler) CreateGroup(c *gin.Context) {
+	namespace := c.Param("namespace")
+	if namespace == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "命名空间名称不能为空",
+		})
+		return
+	}
+
+	var req CreateGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   fmt.Sprintf("请求参数无效: %v", err),
+		})
+		return
+	}
+
+	if err := h.store.CreateGroup(c.Request.Context(), namespace, req.Name, req.Description); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "分组创建成功（分组将在创建配置时自动创建）",
+		Data: map[string]interface{}{
+			"namespace":   namespace,
+			"name":        req.Name,
+			"description": req.Description,
+		},
+	})
+}
+
+// DeleteGroup 删除分组
+// DELETE /api/config/namespaces/:namespace/groups/:name
+func (h *Handler) DeleteGroup(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	if namespace == "" || name == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "命名空间和分组名称不能为空",
+		})
+		return
+	}
+
+	if err := h.store.DeleteGroup(c.Request.Context(), namespace, name); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "分组删除成功",
+	})
 }

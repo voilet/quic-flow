@@ -5,9 +5,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 	"github.com/voilet/quic-flow/pkg/task/models"
 	"github.com/voilet/quic-flow/pkg/task/store"
-	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // GroupAPI 分组管理 API
@@ -44,17 +45,11 @@ func (api *GroupAPI) GetGroups(c *gin.Context) {
 	groups, err := api.groupStore.List(c.Request.Context())
 	if err != nil {
 		api.logger.Error("Failed to list groups", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    groups,
-	})
+	common.SuccessResp(c, groups)
 }
 
 // CreateGroup 创建分组
@@ -66,10 +61,7 @@ func (api *GroupAPI) CreateGroup(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -81,27 +73,18 @@ func (api *GroupAPI) CreateGroup(c *gin.Context) {
 
 	if err := api.groupStore.Create(c.Request.Context(), group); err != nil {
 		api.logger.Error("Failed to create group", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    group,
-	})
+	common.SuccessResp(c, group)
 }
 
 // GetGroup 获取分组详情
 func (api *GroupAPI) GetGroup(c *gin.Context) {
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid group id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid group id")
 		return
 	}
 
@@ -115,34 +98,25 @@ func (api *GroupAPI) GetGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    group,
-	})
+	common.SuccessResp(c, group)
 }
 
 // UpdateGroup 更新分组
 func (api *GroupAPI) UpdateGroup(c *gin.Context) {
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid group id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid group id")
 		return
 	}
 
 	var req struct {
-		Name        *string `json:"name"`
+		Name        *string `json:"name" binding:"required"`
 		Description *string `json:"description"`
 		Tags        *string `json:"tags"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -167,36 +141,24 @@ func (api *GroupAPI) UpdateGroup(c *gin.Context) {
 
 	if err := api.groupStore.Update(c.Request.Context(), group); err != nil {
 		api.logger.Error("Failed to update group", "group_id", groupID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    group,
-	})
+	common.SuccessResp(c, group)
 }
 
 // DeleteGroup 删除分组
 func (api *GroupAPI) DeleteGroup(c *gin.Context) {
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid group id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid group id")
 		return
 	}
 
 	if err := api.groupStore.Delete(c.Request.Context(), groupID); err != nil {
 		api.logger.Error("Failed to delete group", "group_id", groupID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -210,37 +172,25 @@ func (api *GroupAPI) DeleteGroup(c *gin.Context) {
 func (api *GroupAPI) GetGroupClients(c *gin.Context) {
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid group id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid group id")
 		return
 	}
 
 	clients, err := api.groupStore.GetClients(c.Request.Context(), groupID)
 	if err != nil {
 		api.logger.Error("Failed to get group clients", "group_id", groupID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    clients,
-	})
+	common.SuccessResp(c, clients)
 }
 
 // AddGroupClients 添加客户端到分组
 func (api *GroupAPI) AddGroupClients(c *gin.Context) {
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid group id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid group id")
 		return
 	}
 
@@ -249,19 +199,13 @@ func (api *GroupAPI) AddGroupClients(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	if err := api.groupStore.AddClients(c.Request.Context(), groupID, req.ClientIDs); err != nil {
 		api.logger.Error("Failed to add clients to group", "group_id", groupID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -275,10 +219,7 @@ func (api *GroupAPI) AddGroupClients(c *gin.Context) {
 func (api *GroupAPI) RemoveGroupClient(c *gin.Context) {
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid group id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid group id")
 		return
 	}
 
@@ -293,10 +234,7 @@ func (api *GroupAPI) RemoveGroupClient(c *gin.Context) {
 
 	if err := api.groupStore.RemoveClient(c.Request.Context(), groupID, clientID); err != nil {
 		api.logger.Error("Failed to remove client from group", "group_id", groupID, "client_id", clientID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 

@@ -5,21 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/monitoring"
 	"github.com/voilet/quic-flow/pkg/recording"
 )
 
 // RecordingAPI handles recording API endpoints
 type RecordingAPI struct {
-	store         *recording.Store
-	dbStore       *recording.DBStore
-	logger        *monitoring.Logger
-	useDatabase   bool
+	store       *recording.Store
+	dbStore     *recording.DBStore
+	logger      *monitoring.Logger
+	useDatabase bool
 }
 
 // NewRecordingAPI creates a new recording API handler
@@ -106,15 +106,11 @@ func (a *RecordingAPI) ListRecordings(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
+	common.SuccessResp(c, gin.H{
 		"recordings": recordings,
 		"count":      len(recordings),
 	})
@@ -140,17 +136,11 @@ func (a *RecordingAPI) GetRecording(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeRecordingNotFound, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"recording": meta,
-	})
+	common.SuccessResp(c, meta)
 }
 
 // DownloadRecording downloads the raw recording file
@@ -164,10 +154,7 @@ func (a *RecordingAPI) DownloadRecording(c *gin.Context) {
 
 	file, err := a.store.ReadFile(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeRecordingNotFound, err.Error())
 		return
 	}
 	defer file.Close()
@@ -293,17 +280,11 @@ func (a *RecordingAPI) DeleteRecording(c *gin.Context) {
 
 	err := a.store.Delete(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Recording deleted",
-	})
+	common.SuccessResp(c, struct{}{})
 }
 
 // GetStats returns recording statistics
@@ -323,17 +304,11 @@ func (a *RecordingAPI) GetStats(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"stats":   stats,
-	})
+	common.SuccessResp(c, stats)
 }
 
 // CleanupOldRecordings deletes old recordings
@@ -352,15 +327,11 @@ func (a *RecordingAPI) CleanupOldRecordings(c *gin.Context) {
 
 	deleted, err := a.store.DeleteOldRecordings(c.Request.Context(), days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":            true,
+	common.SuccessResp(c, gin.H{
 		"deleted_recordings": deleted,
 		"older_than_days":    days,
 	})

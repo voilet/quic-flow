@@ -19,6 +19,7 @@ import (
 	"github.com/voilet/quic-flow/pkg/batch"
 	"github.com/voilet/quic-flow/pkg/command"
 	appconfig "github.com/voilet/quic-flow/pkg/config"
+	"github.com/voilet/quic-flow/pkg/alert"
 	"github.com/voilet/quic-flow/pkg/configcenter"
 	"github.com/voilet/quic-flow/pkg/dispatcher"
 	"github.com/voilet/quic-flow/pkg/hardware"
@@ -358,6 +359,33 @@ func runServer(cmd *cobra.Command, args []string) {
 		configHandler.RegisterRoutes(configRouter)
 
 		logger.Info("Config center API routes registered")
+	}
+
+	// ========== 告警系统功能 ==========
+	// 创建告警系统存储和 API 处理器
+	if releaseDB != nil {
+		alertStore, err := alert.NewStore(releaseDB)
+		if err != nil {
+			logger.Warn("Failed to create alert store", "error", err)
+		} else {
+			// 执行告警系统数据库迁移
+			ctx := context.Background()
+			logger.Info("Starting alert system database migration...")
+			if err := alertStore.AutoMigrate(ctx); err != nil {
+				logger.Error("Failed to migrate alert tables", "error", err)
+				// 即使迁移失败也继续，但记录错误
+			} else {
+				logger.Info("Alert system database migration completed successfully")
+			}
+
+			alertHandler := alert.NewHandler(alertStore)
+
+			// 注册告警系统 API 路由
+			alertRouter := httpServer.GetRouter().Group("/api")
+			alertHandler.RegisterRoutes(alertRouter)
+
+			logger.Info("Alert system API routes registered")
+		}
 	}
 
 	// ========== 性能分析功能 ==========

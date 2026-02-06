@@ -1,13 +1,13 @@
 package api
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
+	"github.com/voilet/quic-flow/pkg/monitoring"
 	"github.com/voilet/quic-flow/pkg/task/scheduler"
 	"github.com/voilet/quic-flow/pkg/task/store"
-	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
 // TaskAPI 任务管理 API
@@ -71,21 +71,15 @@ func (api *TaskAPI) ListTasks(c *gin.Context) {
 	tasks, total, err := api.taskStore.List(c.Request.Context(), params)
 	if err != nil {
 		api.logger.Error("Failed to list tasks", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"tasks": tasks,
-			"total": total,
-			"page":  page,
-			"page_size": pageSize,
-		},
+	common.SuccessResp(c, gin.H{
+		"tasks":     tasks,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
 	})
 }
 
@@ -93,221 +87,146 @@ func (api *TaskAPI) ListTasks(c *gin.Context) {
 func (api *TaskAPI) CreateTask(c *gin.Context) {
 	var req scheduler.CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	task, err := api.taskManager.CreateTask(c.Request.Context(), &req)
 	if err != nil {
 		api.logger.Error("Failed to create task", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    task,
-	})
+	common.SuccessResp(c, task)
 }
 
 // GetTask 获取任务详情
 func (api *TaskAPI) GetTask(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	task, err := api.taskStore.GetByID(c.Request.Context(), taskID)
 	if err != nil {
 		api.logger.Error("Failed to get task", "task_id", taskID, "error", err)
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "task not found",
-		})
+		common.ErrorResp(c, common.CodeTaskNotFound, "task not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    task,
-	})
+	common.SuccessResp(c, task)
 }
 
 // UpdateTask 更新任务
 func (api *TaskAPI) UpdateTask(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	var req scheduler.UpdateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	req.TaskID = taskID
 	if err := api.taskManager.UpdateTask(c.Request.Context(), &req); err != nil {
 		api.logger.Error("Failed to update task", "task_id", taskID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "task updated",
-	})
+	common.SuccessResp(c, struct{}{})
 }
 
 // DeleteTask 删除任务
 func (api *TaskAPI) DeleteTask(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	if err := api.taskManager.DeleteTask(c.Request.Context(), taskID); err != nil {
 		api.logger.Error("Failed to delete task", "task_id", taskID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "task deleted",
-	})
+	common.SuccessResp(c, struct{}{})
 }
 
 // EnableTask 启用任务
 func (api *TaskAPI) EnableTask(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	if err := api.taskManager.EnableTask(c.Request.Context(), taskID); err != nil {
 		api.logger.Error("Failed to enable task", "task_id", taskID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "task enabled",
-	})
+	common.SuccessResp(c, struct{}{})
 }
 
 // DisableTask 禁用任务
 func (api *TaskAPI) DisableTask(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	if err := api.taskManager.DisableTask(c.Request.Context(), taskID); err != nil {
 		api.logger.Error("Failed to disable task", "task_id", taskID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "task disabled",
-	})
+	common.SuccessResp(c, struct{}{})
 }
 
 // TriggerTask 手动触发任务
 func (api *TaskAPI) TriggerTask(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	if err := api.taskManager.TriggerTask(c.Request.Context(), taskID); err != nil {
 		api.logger.Error("Failed to trigger task", "task_id", taskID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "task triggered",
-	})
+	common.SuccessResp(c, struct{}{})
 }
 
 // GetNextRunTime 获取下次执行时间
 func (api *TaskAPI) GetNextRunTime(c *gin.Context) {
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid task id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
 		return
 	}
 
 	nextRun, err := api.taskManager.GetNextRunTime(taskID)
 	if err != nil {
 		api.logger.Error("Failed to get next run time", "task_id", taskID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"next_run_time": nextRun,
-		},
+	common.SuccessResp(c, gin.H{
+		"next_run_time": nextRun,
 	})
 }

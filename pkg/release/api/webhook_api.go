@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/voilet/quic-flow/pkg/release/models"
 	"github.com/voilet/quic-flow/pkg/release/webhook"
 	"gorm.io/gorm"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // ==================== Webhook 配置管理 API ====================
@@ -28,10 +28,7 @@ func (s *ReleaseAPI) ListWebhooks(c *gin.Context) {
 		Find(&webhooks).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to list webhooks",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list webhooks")
 		return
 	}
 
@@ -61,10 +58,7 @@ func (s *ReleaseAPI) ListWebhooks(c *gin.Context) {
 		items = append(items, item)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // GetWebhook 获取 Webhook 详情
@@ -76,38 +70,29 @@ func (s *ReleaseAPI) GetWebhook(c *gin.Context) {
 	err := s.db.Where("id = ?", id).First(&wh).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Webhook not found",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Webhook not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to get webhook",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Failed to get webhook")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"id":             wh.ID,
-			"project_id":     wh.ProjectID,
-			"name":           wh.Name,
-			"enabled":        wh.Enabled,
-			"source":         wh.Source,
-			"branch_filter":  wh.BranchFilter,
-			"event_types":    wh.EventTypes,
-			"action":         wh.Action,
-			"target_env":     wh.TargetEnv,
-			"auto_deploy":    wh.AutoDeploy,
-			"url":            wh.URL,
-			"trigger_count":  wh.TriggerCount,
-			"last_trigger_at": wh.LastTriggerAt,
-			"created_at":     wh.CreatedAt.Format("2006-01-02 15:04:05"),
-			"created_by":     wh.CreatedBy,
-		},
+	common.SuccessResp(c, gin.H{
+		"id":             wh.ID,
+		"project_id":     wh.ProjectID,
+		"name":           wh.Name,
+		"enabled":        wh.Enabled,
+		"source":         wh.Source,
+		"branch_filter":  wh.BranchFilter,
+		"event_types":    wh.EventTypes,
+		"action":         wh.Action,
+		"target_env":     wh.TargetEnv,
+		"auto_deploy":    wh.AutoDeploy,
+		"url":            wh.URL,
+		"trigger_count":  wh.TriggerCount,
+		"last_trigger_at": wh.LastTriggerAt,
+		"created_at":     wh.CreatedAt.Format("2006-01-02 15:04:05"),
+		"created_by":     wh.CreatedBy,
 	})
 }
 
@@ -128,20 +113,14 @@ type CreateWebhookRequest struct {
 func (s *ReleaseAPI) CreateWebhook(c *gin.Context) {
 	var req CreateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 生成随机密钥
 	secret, err := generateWebhookSecret()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to generate secret",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to generate secret")
 		return
 	}
 
@@ -173,23 +152,11 @@ func (s *ReleaseAPI) CreateWebhook(c *gin.Context) {
 	}
 
 	if err := s.db.Create(wh).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create webhook: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Webhook created successfully",
-		"data": gin.H{
-			"id":     wh.ID,
-			"url":    wh.URL,
-			"secret": secret, // 仅在创建时返回，请妥善保存
-		},
-		"warning": "请立即保存密钥，此后将不再显示。如果丢失，请使用「重新生成密钥」功能。",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"id": wh.ID, "url": wh.URL, "secret": secret}, "Webhook created successfully")
 }
 
 // UpdateWebhookRequest 更新 Webhook 请求
@@ -210,20 +177,14 @@ func (s *ReleaseAPI) UpdateWebhook(c *gin.Context) {
 
 	var req UpdateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 检查是否存在
 	var wh models.WebhookConfig
 	if err := s.db.Where("id = ?", id).First(&wh).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Webhook not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Webhook not found")
 		return
 	}
 
@@ -248,17 +209,11 @@ func (s *ReleaseAPI) UpdateWebhook(c *gin.Context) {
 	updates["auto_deploy"] = req.AutoDeploy
 
 	if err := s.db.Model(&wh).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update webhook",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to update webhook")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Webhook updated successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // DeleteWebhook 删除 Webhook 配置
@@ -267,17 +222,11 @@ func (s *ReleaseAPI) DeleteWebhook(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := s.db.Delete(&models.WebhookConfig{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete webhook",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to delete webhook")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Webhook deleted successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // RegenerateWebhookSecret 重新生成 Webhook 密钥
@@ -288,20 +237,14 @@ func (s *ReleaseAPI) RegenerateWebhookSecret(c *gin.Context) {
 	// 检查是否存在
 	var wh models.WebhookConfig
 	if err := s.db.Where("id = ?", id).First(&wh).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Webhook not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Webhook not found")
 		return
 	}
 
 	// 生成新密钥
 	secret, err := generateWebhookSecret()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to generate secret",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to generate secret")
 		return
 	}
 
@@ -320,22 +263,11 @@ func (s *ReleaseAPI) RegenerateWebhookSecret(c *gin.Context) {
 		"secret": secret,
 		"url":    webhookURL,
 	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update secret",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to update secret")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Secret regenerated successfully",
-		"data": gin.H{
-			"url":    webhookURL,
-			"secret": secret,
-		},
-		"warning": "请立即保存新密钥，此后将不再显示。旧密钥已失效，请更新您的 Git 平台配置。",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"url": webhookURL, "secret": secret}, "Secret regenerated successfully")
 }
 
 // ==================== Webhook 接收处理 ====================
@@ -352,11 +284,7 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 		c.Header("X-RateLimit-Limit", "60")
 		c.Header("X-RateLimit-Remaining", "0")
 		c.Header("X-RateLimit-Reset", resetAt.Format(time.RFC3339))
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			"success":  false,
-			"message":  "Rate limit exceeded",
-			"reset_at": resetAt.Format(time.RFC3339),
-		})
+		common.ErrorResp(c, common.CodeRateLimitExceeded, fmt.Sprintf("Rate limit exceeded. Reset at %s", resetAt.Format(time.RFC3339)))
 		return
 	}
 
@@ -368,10 +296,7 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Failed to read request body",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to read request body")
 		return
 	}
 
@@ -383,18 +308,12 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 	// token 是 secret 的前 8 位
 	err = s.db.Where("SUBSTRING(secret, 1, 8) = ?", token).First(&wh).Error
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Webhook not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Webhook not found")
 		return
 	}
 
 	if !wh.Enabled {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"message": "Webhook is disabled",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Webhook is disabled")
 		return
 	}
 
@@ -413,19 +332,13 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 	// 验证签名
 	handler := webhook.GetHandler(webhook.WebhookSource(wh.Source), wh.Secret)
 	if handler == nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Unsupported webhook source",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Unsupported webhook source")
 		return
 	}
 
 	if signature != "" {
 		if err := handler.VerifySignature(body, signature); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"message": "Invalid signature: " + err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 			return
 		}
 	}
@@ -442,10 +355,7 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 	// 解析 payload
 	pushInfo, err := handler.ParsePayload(body, eventType)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Failed to parse payload: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -460,11 +370,7 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 		}
 		if !matched {
 			s.recordTrigger(&wh, pushInfo, "skipped", "Branch not matched")
-			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"message": "Webhook received but branch not matched",
-				"skipped": true,
-			})
+			common.SuccessResp(c, gin.H{"skipped": true})
 			return
 		}
 	}
@@ -501,16 +407,7 @@ func (s *ReleaseAPI) IncomingWebhook(c *gin.Context) {
 		"last_trigger_at": time.Now(),
 	})
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": status == "success",
-		"message": "Webhook processed",
-		"data": gin.H{
-			"branch":  pushInfo.Branch,
-			"commit":  pushInfo.ShortSHA,
-			"status":  status,
-			"task_id": taskID,
-		},
-	})
+	common.SuccessRespWithMsg(c, gin.H{"branch": pushInfo.Branch, "commit": pushInfo.ShortSHA, "status": status, "task_id": taskID}, "Webhook processed")
 }
 
 // triggerDeploy 触发部署
@@ -603,10 +500,7 @@ func (s *ReleaseAPI) ListTriggerHistory(c *gin.Context) {
 		Find(&records).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to list trigger history",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list trigger history")
 		return
 	}
 
@@ -632,10 +526,7 @@ func (s *ReleaseAPI) ListTriggerHistory(c *gin.Context) {
 		items = append(items, item)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // TestWebhook 测试 Webhook
@@ -645,10 +536,7 @@ func (s *ReleaseAPI) TestWebhook(c *gin.Context) {
 
 	var wh models.WebhookConfig
 	if err := s.db.Where("id = ?", id).First(&wh).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Webhook not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Webhook not found")
 		return
 	}
 
@@ -666,13 +554,7 @@ func (s *ReleaseAPI) TestWebhook(c *gin.Context) {
 
 	s.db.Create(testRecord)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Webhook test triggered",
-		"data": gin.H{
-			"trigger_id": testRecord.ID,
-		},
-	})
+	common.SuccessRespWithMsg(c, gin.H{"trigger_id": testRecord.ID}, "Webhook test triggered")
 }
 
 // generateWebhookSecret 生成随机密钥

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/voilet/quic-flow/pkg/command"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // StreamCommandRequest 流式命令请求
@@ -20,11 +21,11 @@ type StreamCommandRequest struct {
 
 // StreamCommandEvent SSE 事件
 type StreamCommandEvent struct {
-	Type     string                      `json:"type"` // "start", "progress", "result", "complete"
-	TaskID   string                      `json:"task_id,omitempty"` // 任务ID（用于取消）
-	ClientID string                      `json:"client_id,omitempty"`
+	Type     string                       `json:"type"`              // "start", "progress", "result", "complete"
+	TaskID   string                       `json:"task_id,omitempty"` // 任务ID（用于取消）
+	ClientID string                       `json:"client_id,omitempty"`
 	Result   *command.ClientCommandResult `json:"result,omitempty"`
-	Summary  *StreamSummary              `json:"summary,omitempty"`
+	Summary  *StreamSummary               `json:"summary,omitempty"`
 }
 
 // StreamSummary 流式命令汇总
@@ -38,24 +39,18 @@ type StreamSummary struct {
 // handleStreamMultiCommand 处理流式多播命令请求 (SSE)
 func (h *HTTPServer) handleStreamMultiCommand(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	var req StreamCommandRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid request body: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	if len(req.ClientIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "client_ids cannot be empty",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "client_ids cannot be empty")
 		return
 	}
 
@@ -73,9 +68,7 @@ func (h *HTTPServer) handleStreamMultiCommand(c *gin.Context) {
 	// 获取底层 ResponseWriter 并启用 Flusher
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Streaming not supported",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Streaming not supported")
 		return
 	}
 
@@ -92,18 +85,18 @@ func (h *HTTPServer) handleStreamMultiCommand(c *gin.Context) {
 	// 在 goroutine 中执行，通过 channel 接收结果
 	resultChan := make(chan *command.ClientCommandResult, total)
 	taskIDChan := make(chan string, 1)
-	
+
 	// 启动后台任务执行
 	go func() {
 		response := h.commandManager.SendCommandToMultiple(req.ClientIDs, req.CommandType, req.Payload, timeout)
-		
+
 		// 发送 task_id
 		taskIDChan <- response.TaskID
-		
+
 		// 将结果发送到通道
 		for _, result := range response.Results {
 			resultChan <- result
-	}
+		}
 		close(resultChan)
 	}()
 
@@ -221,25 +214,19 @@ type ContainerLogsStreamEvent struct {
 // GET /api/containers/logs/stream?client_id=xxx&container_id=xxx
 func (h *HTTPServer) handleContainerLogsStream(c *gin.Context) {
 	if h.commandManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Command manager not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Command manager not initialized")
 		return
 	}
 
 	var req ContainerLogsStreamRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Invalid query parameters: %v", err),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	// 验证必须提供 container_id 或 container_name
 	if req.ContainerID == "" && req.ContainerName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "container_id or container_name is required",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "container_id or container_name is required")
 		return
 	}
 
@@ -252,9 +239,7 @@ func (h *HTTPServer) handleContainerLogsStream(c *gin.Context) {
 	// 获取底层 ResponseWriter 并启用 Flusher
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Streaming not supported",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Streaming not supported")
 		return
 	}
 

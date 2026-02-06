@@ -103,38 +103,41 @@
         <el-table-column prop="data_id" label="DataID" min-width="200">
           <template #default="{ row }">
             <div class="data-id-cell">
-              <el-icon class="type-icon" :class="`type-${row.type}`">
-                <component :is="getTypeIcon(row.type)" />
+              <el-icon class="type-icon" :class="`type-${row.format || row.type}`">
+                <component :is="getTypeIcon(row.format || row.type)" />
               </el-icon>
               <span class="data-id-text">{{ row.data_id }}</span>
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="type" label="类型" width="100">
+        <el-table-column prop="format" label="格式" width="100">
           <template #default="{ row }">
-            <el-tag :type="getTypeTagType(row.type)" size="small">
-              {{ row.type.toUpperCase() }}
+            <el-tag :type="getTypeTagType(row.format || row.type)" size="small">
+              {{ (row.format || row.type || 'yaml').toUpperCase() }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="tags" label="标签" width="150">
           <template #default="{ row }">
-            <el-tag
-              v-for="tag in row.tags"
-              :key="tag"
-              size="small"
-              class="tag-item"
-            >
-              {{ tag }}
-            </el-tag>
+            <template v-if="row.tags && row.tags.length > 0">
+              <el-tag
+                v-for="tag in row.tags"
+                :key="tag"
+                size="small"
+                class="tag-item"
+              >
+                {{ tag }}
+              </el-tag>
+            </template>
+            <span v-else class="text-gray">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="version" label="版本" width="80" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.published ? 'success' : 'info'" size="small">
-              {{ row.published ? '已发布' : '未发布' }}
+            <el-tag :type="(row.published !== undefined ? row.published : false) ? 'success' : 'info'" size="small">
+              {{ (row.published !== undefined ? row.published : false) ? '已发布' : '未发布' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -267,7 +270,8 @@ const loadNamespaces = async () => {
   try {
     const res = await configApi.listNamespaces()
     if (res.success) {
-      namespaces.value = res.data || []
+      // 后端返回格式: {success: true, data: [...]}
+      namespaces.value = (res.data || []).map(item => typeof item === 'string' ? { name: item } : item)
     }
   } catch (error) {
     console.error('Failed to load namespaces:', error)
@@ -283,7 +287,8 @@ const loadGroups = async () => {
   try {
     const res = await configApi.listGroups(searchForm.namespace)
     if (res.success) {
-      groups.value = res.data || []
+      // 后端返回格式: {success: true, data: [...]}
+      groups.value = (res.data || []).map(item => typeof item === 'string' ? { name: item } : item)
     }
   } catch (error) {
     console.error('Failed to load groups:', error)
@@ -295,6 +300,7 @@ const loadTags = async () => {
   try {
     const res = await configApi.listTags()
     if (res.success) {
+      // 后端返回格式: {success: true, data: [...]}
       allTags.value = res.data || []
     }
   } catch (error) {
@@ -316,10 +322,42 @@ const loadConfigs = async () => {
     if (searchForm.type) params.type = searchForm.type
     if (searchForm.tags.length > 0) params.tags = searchForm.tags.join(',')
 
-    const res = await configApi.listConfigs(params)
-    if (res.success) {
-      tableData.value = res.data.items || []
-      pagination.total = res.data.total || 0
+    try {
+      const res = await configApi.listConfigs(params)
+      console.log('API Response:', res) // 调试输出
+      
+      // 处理响应数据：响应拦截器已经返回了 response.data
+      // 后端返回格式: { success: true, items: [...], total: 1, page: 1, page_size: 20 }
+      if (res && (res.success !== false)) {
+        // 转换数据格式，将后端的 format 映射到前端的 type
+        const items = (res.items || res.data || []).map(item => ({
+          ...item,
+          type: item.format || item.type || 'yaml', // 后端返回的是 format，前端使用 type
+          published: item.published !== undefined ? item.published : false, // 默认未发布
+          tags: Array.isArray(item.tags) ? item.tags : (item.tags ? [item.tags] : []) // 确保 tags 是数组
+        }))
+        tableData.value = items
+        pagination.total = res.total || 0
+        pagination.page = res.page || pagination.page
+        pagination.pageSize = res.page_size || pagination.pageSize
+        
+        console.log('Processed configs:', items.length, 'items')
+        console.log('Table data:', tableData.value)
+        console.log('Pagination:', pagination)
+        
+        if (items.length === 0) {
+          console.warn('No configs found')
+        }
+      } else {
+        const errorMsg = res?.error || res?.message || '加载配置列表失败'
+        ElMessage.error(errorMsg)
+        console.error('Load configs failed:', res)
+        tableData.value = []
+      }
+    } catch (error) {
+      console.error('Load configs error:', error)
+      ElMessage.error('加载配置列表失败: ' + (error.message || '未知错误'))
+      tableData.value = []
     }
   } catch (error) {
     ElMessage.error('加载配置列表失败')
@@ -539,5 +577,10 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.text-gray {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

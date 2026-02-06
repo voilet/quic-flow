@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/config"
 	"github.com/voilet/quic-flow/pkg/monitoring"
 	releasemodels "github.com/voilet/quic-flow/pkg/release/models"
@@ -16,12 +17,12 @@ import (
 
 // SetupAPI 数据库初始化引导 API
 type SetupAPI struct {
-	logger       *monitoring.Logger
-	configPath   string
-	db           *gorm.DB
-	dbMu         sync.RWMutex
-	initialized  bool
-	onDBReady    func(*gorm.DB) // 数据库就绪回调
+	logger      *monitoring.Logger
+	configPath  string
+	db          *gorm.DB
+	dbMu        sync.RWMutex
+	initialized bool
+	onDBReady   func(*gorm.DB) // 数据库就绪回调
 }
 
 // NewSetupAPI 创建 SetupAPI
@@ -66,14 +67,14 @@ func (s *SetupAPI) RegisterRoutes(r *gin.RouterGroup) {
 
 // DatabaseConfig 数据库配置请求
 type DatabaseConfig struct {
-	Type        string `json:"type"`                        // postgres 或 mysql
+	Type        string `json:"type"` // postgres 或 mysql
 	Host        string `json:"host" binding:"required"`
 	Port        int    `json:"port" binding:"required"`
 	User        string `json:"user" binding:"required"`
 	Password    string `json:"password"`
 	DBName      string `json:"dbname" binding:"required"`
-	SSLMode     string `json:"sslmode"`                     // PostgreSQL 专用
-	Charset     string `json:"charset"`                     // MySQL 专用
+	SSLMode     string `json:"sslmode"` // PostgreSQL 专用
+	Charset     string `json:"charset"` // MySQL 专用
 	AutoMigrate bool   `json:"auto_migrate"`
 }
 
@@ -108,14 +109,14 @@ func (s *SetupAPI) handleStatus(c *gin.Context) {
 		status.Message = "Database not configured"
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "status": status})
+	common.SuccessResp(c, status)
 }
 
 // handleTestConnection 测试数据库连接
 func (s *SetupAPI) handleTestConnection(c *gin.Context) {
 	var req DatabaseConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -153,11 +154,7 @@ func (s *SetupAPI) handleTestConnection(c *gin.Context) {
 	db, err := releasemodels.InitDB(dbConfig)
 	if err != nil {
 		s.logger.Error("Database connection test failed", "error", err)
-		c.JSON(http.StatusOK, gin.H{
-			"success":   false,
-			"connected": false,
-			"error":     fmt.Sprintf("Connection failed: %v", err),
-		})
+		common.ErrorResp(c, common.CodeDatabaseError, fmt.Sprintf("Connection failed: %v", err))
 		return
 	}
 
@@ -168,8 +165,7 @@ func (s *SetupAPI) handleTestConnection(c *gin.Context) {
 	}
 
 	s.logger.Info("Database connection test successful")
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
+	common.SuccessResp(c, gin.H{
 		"connected": true,
 		"message":   "Connection successful",
 	})
@@ -177,20 +173,20 @@ func (s *SetupAPI) handleTestConnection(c *gin.Context) {
 
 // ListDatabasesRequest 列出数据库请求
 type ListDatabasesRequest struct {
-	Type     string `json:"type"`                     // postgres 或 mysql
+	Type     string `json:"type"` // postgres 或 mysql
 	Host     string `json:"host" binding:"required"`
 	Port     int    `json:"port" binding:"required"`
 	User     string `json:"user" binding:"required"`
 	Password string `json:"password"`
-	SSLMode  string `json:"sslmode"`                  // PostgreSQL 专用
-	Charset  string `json:"charset"`                  // MySQL 专用
+	SSLMode  string `json:"sslmode"` // PostgreSQL 专用
+	Charset  string `json:"charset"` // MySQL 专用
 }
 
 // handleListDatabases 列出可用的数据库
 func (s *SetupAPI) handleListDatabases(c *gin.Context) {
 	var req ListDatabasesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -245,7 +241,7 @@ func (s *SetupAPI) handleListDatabases(c *gin.Context) {
 func (s *SetupAPI) handleInitialize(c *gin.Context) {
 	var req DatabaseConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -491,10 +487,10 @@ func (s *SetupAPI) handleListTables(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":         true,
-		"tables":          tables,
-		"table_count":     len(tables),
-		"database_type":   dialectorName,
+		"success":          true,
+		"tables":           tables,
+		"table_count":      len(tables),
+		"database_type":    dialectorName,
 		"current_database": currentDB,
 	})
 }

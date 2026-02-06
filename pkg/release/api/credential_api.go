@@ -1,12 +1,12 @@
 package api
 
 import (
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/voilet/quic-flow/pkg/release/models"
 	"gorm.io/gorm"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // CredentialListResponse 凭证列表响应
@@ -95,10 +95,7 @@ func (s *ReleaseAPI) ListCredentials(c *gin.Context) {
 	}
 
 	if err := query.Order("created_at DESC").Find(&creds).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to list credentials",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list credentials")
 		return
 	}
 
@@ -136,13 +133,10 @@ func (s *ReleaseAPI) ListCredentials(c *gin.Context) {
 			}
 		}
 
-		items = append(items, item)
+			items = append(items, item)
 	}
 
-	c.JSON(http.StatusOK, CredentialListResponse{
-		Success: true,
-		Data:     items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // GetCredential 获取凭证详情
@@ -153,15 +147,9 @@ func (s *ReleaseAPI) GetCredential(c *gin.Context) {
 	cred, data, err := s.credentialMgr.GetWithData(id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Credential not found",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Credential not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to get credential",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Failed to get credential")
 		}
 		return
 	}
@@ -196,10 +184,7 @@ func (s *ReleaseAPI) GetCredential(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, CredentialDetailResponse{
-		Success: true,
-		Data:     detail,
-	})
+	common.SuccessResp(c, detail)
 }
 
 // CreateCredential 创建凭证
@@ -207,10 +192,7 @@ func (s *ReleaseAPI) GetCredential(c *gin.Context) {
 func (s *ReleaseAPI) CreateCredential(c *gin.Context) {
 	var req CreateCredentialRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -241,18 +223,11 @@ func (s *ReleaseAPI) CreateCredential(c *gin.Context) {
 	}
 
 	if err := s.credentialMgr.Create(cred, credData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create credential: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Credential created successfully",
-		"data":    gin.H{"id": cred.ID},
-	})
+	common.SuccessRespWithMsg(c, gin.H{"id": cred.ID}, "Credential created successfully")
 }
 
 // UpdateCredential 更新凭证
@@ -262,19 +237,13 @@ func (s *ReleaseAPI) UpdateCredential(c *gin.Context) {
 
 	var req UpdateCredentialRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	cred, err := s.credentialMgr.Get(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Credential not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Credential not found")
 		return
 	}
 
@@ -282,17 +251,11 @@ func (s *ReleaseAPI) UpdateCredential(c *gin.Context) {
 	cred.Description = req.Description
 
 	if err := s.credentialMgr.Update(cred); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update credential",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to update credential")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Credential updated successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // DeleteCredential 删除凭证
@@ -302,23 +265,14 @@ func (s *ReleaseAPI) DeleteCredential(c *gin.Context) {
 
 	if err := s.credentialMgr.Delete(id); err != nil {
 		if err.Error() == "credential is in use" {
-			c.JSON(http.StatusConflict, gin.H{
-				"success": false,
-				"message": "Credential is in use, cannot delete",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Credential is in use, cannot delete")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to delete credential",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Failed to delete credential")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Credential deleted successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // GetProjectCredentials 获取项目的可用凭证
@@ -328,10 +282,7 @@ func (s *ReleaseAPI) GetProjectCredentials(c *gin.Context) {
 
 	creds, err := s.credentialMgr.ListByProject(projectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to list credentials",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list credentials")
 		return
 	}
 
@@ -356,10 +307,7 @@ func (s *ReleaseAPI) GetProjectCredentials(c *gin.Context) {
 		items = append(items, item)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":     items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // AddProjectCredential 关联凭证到项目
@@ -372,25 +320,16 @@ func (s *ReleaseAPI) AddProjectCredential(c *gin.Context) {
 		Alias        string `json:"alias"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := s.credentialMgr.AddToProject(projectID, req.CredentialID, req.Alias); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to add credential to project",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to add credential to project")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Credential added to project",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // RemoveProjectCredential 取消项目凭证关联
@@ -400,17 +339,11 @@ func (s *ReleaseAPI) RemoveProjectCredential(c *gin.Context) {
 	credentialID := c.Param("credential_id")
 
 	if err := s.credentialMgr.RemoveFromProject(projectID, credentialID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to remove credential from project",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to remove credential from project")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Credential removed from project",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // getCurrentUser 从上下文获取当前用户

@@ -1,10 +1,10 @@
 package api
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // SSHConnectionInfoProvider 提供 SSH 连接信息的接口
@@ -112,35 +112,25 @@ type SSHExecOneShotRequest struct {
 func (h *HTTPServer) handleSSHConnect(c *gin.Context, sshManager SSHClientManagerAPI) {
 	var req SSHConnectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	// 检查是否已连接
 	if sshManager.IsConnected(req.ClientID) {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"error":   "SSH connection already exists",
-		})
+		common.ErrorResp(c, common.CodeConflict, "SSH connection already exists")
 		return
 	}
 
 	// 建立连接
 	if err := sshManager.Connect(req.ClientID, req.User, req.Password); err != nil {
 		h.logger.Error("SSH connect failed", "client_id", req.ClientID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeSSHConnectionFailed, err.Error())
 		return
 	}
 
 	h.logger.Info("SSH connected", "client_id", req.ClientID)
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
+	common.SuccessResp(c, gin.H{
 		"client_id": req.ClientID,
 		"message":   "SSH connection established",
 	})
@@ -152,16 +142,12 @@ func (h *HTTPServer) handleSSHDisconnect(c *gin.Context, sshManager SSHClientMan
 
 	if err := sshManager.Disconnect(clientID); err != nil {
 		h.logger.Error("SSH disconnect failed", "client_id", clientID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	h.logger.Info("SSH disconnected", "client_id", clientID)
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
+	common.SuccessResp(c, gin.H{
 		"client_id": clientID,
 		"message":   "SSH connection closed",
 	})
@@ -173,19 +159,13 @@ func (h *HTTPServer) handleSSHExec(c *gin.Context, sshManager SSHClientManagerAP
 
 	var req SSHExecRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	// 检查是否已连接
 	if !sshManager.IsConnected(clientID) {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "SSH connection not found, please connect first",
-		})
+		common.ErrorResp(c, common.CodeSSHConnectionFailed, "SSH connection not found, please connect first")
 		return
 	}
 
@@ -193,18 +173,16 @@ func (h *HTTPServer) handleSSHExec(c *gin.Context, sshManager SSHClientManagerAP
 	output, err := sshManager.ExecuteCommand(clientID, req.Command)
 	if err != nil {
 		h.logger.Error("SSH exec failed", "client_id", clientID, "command", req.Command, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success":   false,
+		common.ErrorRespWithData(c, common.CodeInternalError, gin.H{
 			"error":     err.Error(),
 			"output":    output,
 			"client_id": clientID,
-		})
+		}, "SSH command execution failed")
 		return
 	}
 
 	h.logger.Info("SSH exec success", "client_id", clientID, "command", req.Command)
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
+	common.SuccessResp(c, gin.H{
 		"client_id": clientID,
 		"command":   req.Command,
 		"output":    output,
@@ -215,10 +193,7 @@ func (h *HTTPServer) handleSSHExec(c *gin.Context, sshManager SSHClientManagerAP
 func (h *HTTPServer) handleSSHExecOneShot(c *gin.Context, sshManager SSHClientManagerAPI) {
 	var req SSHExecOneShotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -226,18 +201,16 @@ func (h *HTTPServer) handleSSHExecOneShot(c *gin.Context, sshManager SSHClientMa
 	output, err := sshManager.ExecuteCommandOneShot(req.ClientID, req.User, req.Password, req.Command)
 	if err != nil {
 		h.logger.Error("SSH exec-oneshot failed", "client_id", req.ClientID, "command", req.Command, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success":   false,
+		common.ErrorRespWithData(c, common.CodeSSHConnectionFailed, gin.H{
 			"error":     err.Error(),
 			"output":    output,
 			"client_id": req.ClientID,
-		})
+		}, "SSH one-shot command execution failed")
 		return
 	}
 
 	h.logger.Info("SSH exec-oneshot success", "client_id", req.ClientID, "command", req.Command)
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
+	common.SuccessResp(c, gin.H{
 		"client_id": req.ClientID,
 		"command":   req.Command,
 		"output":    output,
@@ -258,8 +231,7 @@ func (h *HTTPServer) handleSSHListConnections(c *gin.Context, sshManager SSHClie
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":     true,
+	common.SuccessResp(c, gin.H{
 		"connections": apiConnections,
 		"count":       len(apiConnections),
 	})
@@ -271,8 +243,7 @@ func (h *HTTPServer) handleSSHStatus(c *gin.Context, sshManager SSHClientManager
 
 	connected := sshManager.IsConnected(clientID)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
+	common.SuccessResp(c, gin.H{
 		"client_id": clientID,
 		"connected": connected,
 	})

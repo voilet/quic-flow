@@ -1,12 +1,12 @@
 package api
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/voilet/quic-flow/pkg/release/models"
 	"gorm.io/gorm"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // ==================== 成员管理 API ====================
@@ -22,10 +22,7 @@ func (s *ReleaseAPI) ListMembers(c *gin.Context) {
 		Find(&members).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to list members",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list members")
 		return
 	}
 
@@ -40,10 +37,7 @@ func (s *ReleaseAPI) ListMembers(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // AddMemberRequest 添加成员请求
@@ -59,10 +53,7 @@ func (s *ReleaseAPI) AddMember(c *gin.Context) {
 
 	var req AddMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -74,15 +65,9 @@ func (s *ReleaseAPI) AddMember(c *gin.Context) {
 	var user SysUser
 	if err := s.db.Table("sys_users").Where("id = ? OR username = ?", req.UserID, req.UserID).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "User not found",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "User not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to find user",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Failed to find user")
 		}
 		return
 	}
@@ -92,10 +77,7 @@ func (s *ReleaseAPI) AddMember(c *gin.Context) {
 	userIDStr := strconv.FormatUint(uint64(user.ID), 10) // 转换为字符串存储
 	err := s.db.Where("project_id = ? AND user_id = ?", projectID, userIDStr).First(&existing).Error
 	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "User is already a member",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "User is already a member")
 		return
 	}
 
@@ -108,14 +90,11 @@ func (s *ReleaseAPI) AddMember(c *gin.Context) {
 	}
 
 	if err := s.db.Create(member).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to add member",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to add member")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"message": "Member added successfully",
 		"data": gin.H{
@@ -139,10 +118,7 @@ func (s *ReleaseAPI) UpdateMember(c *gin.Context) {
 
 	var req UpdateMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -150,26 +126,17 @@ func (s *ReleaseAPI) UpdateMember(c *gin.Context) {
 	var member models.ProjectMember
 	err := s.db.Where("project_id = ? AND user_id = ?", projectID, userID).First(&member).Error
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Member not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Member not found")
 		return
 	}
 
 	// 更新角色
 	if err := s.db.Model(&member).Update("role", req.Role).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update member",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to update member")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Member updated successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // RemoveMember 移除项目成员
@@ -187,34 +154,22 @@ func (s *ReleaseAPI) RemoveMember(c *gin.Context) {
 	var member models.ProjectMember
 	err := s.db.Where("project_id = ? AND user_id = ?", projectID, userID).First(&member).Error
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Member not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Member not found")
 		return
 	}
 
 	if member.Role == models.ProjectRoleOwner && ownerCount <= 1 {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"message": "Cannot remove the last owner",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Cannot remove the last owner")
 		return
 	}
 
 	// 删除成员
 	if err := s.db.Where("project_id = ? AND user_id = ?", projectID, userID).Delete(&models.ProjectMember{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to remove member",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to remove member")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Member removed successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 用户管理 API ====================
@@ -224,10 +179,7 @@ func (s *ReleaseAPI) RemoveMember(c *gin.Context) {
 func (s *ReleaseAPI) SearchUsers(c *gin.Context) {
 	search := c.Query("q")
 	if search == "" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data":    []interface{}{},
-		})
+		common.SuccessResp(c, []interface{}{})
 		return
 	}
 
@@ -248,10 +200,7 @@ func (s *ReleaseAPI) SearchUsers(c *gin.Context) {
 	err := query.Limit(20).Find(&users).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to search users",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to search users")
 		return
 	}
 
@@ -266,10 +215,7 @@ func (s *ReleaseAPI) SearchUsers(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // ListUsers 列出所有用户（用于搜索）
@@ -287,10 +233,7 @@ func (s *ReleaseAPI) ListUsers(c *gin.Context) {
 	err := query.Limit(50).Find(&users).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to list users",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list users")
 		return
 	}
 
@@ -305,10 +248,7 @@ func (s *ReleaseAPI) ListUsers(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    items,
-	})
+	common.SuccessResp(c, gin.H{"data": items})
 }
 
 // GetUser 获取用户详情
@@ -321,20 +261,14 @@ func (s *ReleaseAPI) GetUser(c *gin.Context) {
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "User not found",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "User not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to get user",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Failed to get user")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"data": gin.H{
 			"id":           user.ID,
@@ -362,10 +296,7 @@ type CreateUserRequest struct {
 func (s *ReleaseAPI) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -373,10 +304,7 @@ func (s *ReleaseAPI) CreateUser(c *gin.Context) {
 	var existing models.User
 	err := s.db.Where("username = ?", req.Username).First(&existing).Error
 	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "Username already exists",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Username already exists")
 		return
 	}
 
@@ -388,14 +316,11 @@ func (s *ReleaseAPI) CreateUser(c *gin.Context) {
 	}
 
 	if err := s.db.Create(user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create user",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to create user")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"message": "User created successfully",
 		"data": gin.H{

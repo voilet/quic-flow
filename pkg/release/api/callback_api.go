@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/voilet/quic-flow/pkg/release/callback"
 	"github.com/voilet/quic-flow/pkg/release/models"
 	"gorm.io/gorm"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // ==================== 回调配置管理 API ====================
@@ -30,10 +30,7 @@ func (api *ReleaseAPI) CreateCallbackConfig(c *gin.Context) {
 
 	projectID := c.Param("id")
 	if projectID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Project ID is required",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Project ID is required")
 		return
 	}
 
@@ -41,25 +38,16 @@ func (api *ReleaseAPI) CreateCallbackConfig(c *gin.Context) {
 	var project models.Project
 	if err := api.db.First(&project, "id = ?", projectID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Project not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Project not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
 	var config models.CallbackConfig
 	if err := c.ShouldBindJSON(&config); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -68,28 +56,19 @@ func (api *ReleaseAPI) CreateCallbackConfig(c *gin.Context) {
 
 	// 验证渠道配置
 	if len(config.Channels) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "At least one callback channel is required",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "At least one callback channel is required")
 		return
 	}
 
 	// 验证渠道URL安全性
 	if err := api.validateChannelURLs(config.Channels); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 验证事件类型
 	if len(config.Events) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "At least one event type is required",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "At least one event type is required")
 		return
 	}
 
@@ -101,27 +80,18 @@ func (api *ReleaseAPI) CreateCallbackConfig(c *gin.Context) {
 	}
 	for _, event := range config.Events {
 		if !validEvents[event] {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid event type: " + event,
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid event type: ")
 			return
 		}
 	}
 
 	// 创建配置
 	if err := api.db.Create(&config).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    config,
-	})
+	common.SuccessResp(c, gin.H{"data": config})
 }
 
 // ListCallbackConfigs 列出项目的回调配置
@@ -140,17 +110,11 @@ func (api *ReleaseAPI) ListCallbackConfigs(c *gin.Context) {
 
 	var configs []models.CallbackConfig
 	if err := api.db.Where("project_id = ?", projectID).Find(&configs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    configs,
-	})
+	common.SuccessResp(c, gin.H{"data": configs})
 }
 
 // GetCallbackConfig 获取回调配置详情
@@ -169,23 +133,14 @@ func (api *ReleaseAPI) GetCallbackConfig(c *gin.Context) {
 	var config models.CallbackConfig
 	if err := api.db.First(&config, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Callback config not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Callback config not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    config,
-	})
+	common.SuccessResp(c, gin.H{"data": config})
 }
 
 // UpdateCallbackConfig 更新回调配置
@@ -208,25 +163,16 @@ func (api *ReleaseAPI) UpdateCallbackConfig(c *gin.Context) {
 	var existing models.CallbackConfig
 	if err := api.db.First(&existing, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Callback config not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Callback config not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
 	var update models.CallbackConfig
 	if err := c.ShouldBindJSON(&update); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -236,28 +182,19 @@ func (api *ReleaseAPI) UpdateCallbackConfig(c *gin.Context) {
 
 	// 验证渠道配置
 	if len(update.Channels) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "At least one callback channel is required",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "At least one callback channel is required")
 		return
 	}
 
 	// 验证渠道URL安全性
 	if err := api.validateChannelURLs(update.Channels); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 验证事件类型
 	if len(update.Events) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "At least one event type is required",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "At least one event type is required")
 		return
 	}
 
@@ -269,27 +206,18 @@ func (api *ReleaseAPI) UpdateCallbackConfig(c *gin.Context) {
 	}
 	for _, event := range update.Events {
 		if !validEvents[event] {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid event type: " + event,
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid event type: ")
 			return
 		}
 	}
 
 	// 更新
 	if err := api.db.Save(&update).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    update,
-	})
+	common.SuccessResp(c, gin.H{"data": update})
 }
 
 // DeleteCallbackConfig 删除回调配置
@@ -308,17 +236,11 @@ func (api *ReleaseAPI) DeleteCallbackConfig(c *gin.Context) {
 
 	// 软删除
 	if err := api.db.Delete(&models.CallbackConfig{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Callback config deleted successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // TestCallbackConfig 测试回调配置
@@ -340,15 +262,9 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 	var config models.CallbackConfig
 	if err := api.db.First(&config, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Callback config not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Callback config not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
@@ -358,10 +274,7 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 		ChannelType models.CallbackType `json:"channel_type"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -375,10 +288,7 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 	}
 
 	if channel == nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Channel not found or disabled",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Channel not found or disabled")
 		return
 	}
 
@@ -418,10 +328,7 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 			notifier := callback.NewFeishuNotifier(config)
 			err = notifier.Send(testPayload)
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid feishu config",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid feishu config")
 			return
 		}
 	case models.CallbackTypeDingTalk:
@@ -429,10 +336,7 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 			notifier := callback.NewDingTalkNotifier(config)
 			err = notifier.Send(testPayload)
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid dingtalk config",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid dingtalk config")
 			return
 		}
 	case models.CallbackTypeWeChat:
@@ -440,10 +344,7 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 			notifier := callback.NewWeChatNotifier(config)
 			err = notifier.Send(testPayload)
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid wechat config",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid wechat config")
 			return
 		}
 	case models.CallbackTypeCustom:
@@ -451,22 +352,16 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 			notifier := callback.NewCustomNotifier(config)
 			err = notifier.Send(testPayload)
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid custom callback config",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid custom callback config")
 			return
 		}
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Unsupported channel type",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Unsupported channel type")
 		return
 	}
 
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
+		common.SuccessResp(c, gin.H{
 			"success": false,
 			"message": "Test callback failed",
 			"error":   err.Error(),
@@ -478,14 +373,10 @@ func (api *ReleaseAPI) TestCallbackConfig(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Test callback sent successfully",
-		"data": gin.H{
+	common.SuccessRespWithMsg(c, gin.H{
 			"channel": req.ChannelType,
 			"payload": testPayload,
-		},
-	})
+		}, "Test callback sent successfully")
 }
 
 // TestCallbackDirect 直接测试回调配置（不保存）
@@ -508,10 +399,7 @@ func (api *ReleaseAPI) TestCallbackDirect(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -548,70 +436,46 @@ func (api *ReleaseAPI) TestCallbackDirect(c *gin.Context) {
 	switch req.ChannelType {
 	case models.CallbackTypeFeishu:
 		if req.ChannelConfig.Feishu == nil || req.ChannelConfig.Feishu.WebhookURL == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Feishu webhook URL is required",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Feishu webhook URL is required")
 			return
 		}
 		// 验证URL安全性
 		if result := callback.ValidateCallbackURL(req.ChannelConfig.Feishu.WebhookURL); !result.Valid {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid feishu webhook URL: " + result.Error,
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid feishu webhook URL: ")
 			return
 		}
 		notifier := callback.NewFeishuNotifier(req.ChannelConfig.Feishu)
 		err = notifier.Send(testPayload)
 	case models.CallbackTypeDingTalk:
 		if req.ChannelConfig.DingTalk == nil || req.ChannelConfig.DingTalk.WebhookURL == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "DingTalk webhook URL is required",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "DingTalk webhook URL is required")
 			return
 		}
 		// 验证URL安全性
 		if result := callback.ValidateCallbackURL(req.ChannelConfig.DingTalk.WebhookURL); !result.Valid {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid dingtalk webhook URL: " + result.Error,
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid dingtalk webhook URL: ")
 			return
 		}
 		notifier := callback.NewDingTalkNotifier(req.ChannelConfig.DingTalk)
 		err = notifier.Send(testPayload)
 	case models.CallbackTypeWeChat:
 		if req.ChannelConfig.WeChat == nil || req.ChannelConfig.WeChat.CorpID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "WeChat config is required",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "WeChat config is required")
 			return
 		}
 		notifier := callback.NewWeChatNotifier(req.ChannelConfig.WeChat)
 		err = notifier.Send(testPayload)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Unsupported channel type",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Unsupported channel type")
 		return
 	}
 
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Test message sent successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ListCallbackHistory 列出回调历史
@@ -667,14 +531,11 @@ func (api *ReleaseAPI) ListCallbackHistory(c *gin.Context) {
 	var history []models.CallbackHistory
 	offset := (page - 1) * pageSize
 	if err := query.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&history).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"data": gin.H{
 			"items": history,
@@ -703,17 +564,11 @@ func (api *ReleaseAPI) ListTaskCallbackHistory(c *gin.Context) {
 	if err := api.db.Where("task_id = ?", taskID).
 		Order("created_at DESC").
 		Find(&history).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    history,
-	})
+	common.SuccessResp(c, gin.H{"data": history})
 }
 
 // GetCallbackHistory 获取回调历史详情
@@ -732,23 +587,14 @@ func (api *ReleaseAPI) GetCallbackHistory(c *gin.Context) {
 	var history models.CallbackHistory
 	if err := api.db.First(&history, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Callback history not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Callback history not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    history,
-	})
+	common.SuccessResp(c, gin.H{"data": history})
 }
 
 // RetryCallbackHistory 重试失败的回调
@@ -769,35 +615,23 @@ func (api *ReleaseAPI) RetryCallbackHistory(c *gin.Context) {
 	var history models.CallbackHistory
 	if err := api.db.First(&history, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Callback history not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Callback history not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
 	// 只有失败的记录才能重试
 	if history.Status != models.CallbackStatusFailed {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Only failed callbacks can be retried",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Only failed callbacks can be retried")
 		return
 	}
 
 	// 获取回调配置
 	var config models.CallbackConfig
 	if err := api.db.First(&config, "id = ?", history.ConfigID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Callback config not found",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Callback config not found")
 		return
 	}
 
@@ -811,10 +645,7 @@ func (api *ReleaseAPI) RetryCallbackHistory(c *gin.Context) {
 	}
 
 	if channel == nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Channel not found in config",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Channel not found in config")
 		return
 	}
 
@@ -829,11 +660,7 @@ func (api *ReleaseAPI) RetryCallbackHistory(c *gin.Context) {
 		history.Error = err.Error()
 		api.db.Save(&history)
 
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "Retry failed",
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -843,10 +670,7 @@ func (api *ReleaseAPI) RetryCallbackHistory(c *gin.Context) {
 	history.Error = ""
 	api.db.Save(&history)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Callback retried successfully",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // GetCallbackStats 获取回调统计
@@ -975,7 +799,7 @@ func (api *ReleaseAPI) GetCallbackStats(c *gin.Context) {
 		queueStatus = api.callbackMgr.GetRetryQueueStatus()
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"data": gin.H{
 			"total_count":    totalCount,
@@ -1008,10 +832,7 @@ func (api *ReleaseAPI) PreviewCallbackTemplate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -1020,7 +841,7 @@ func (api *ReleaseAPI) PreviewCallbackTemplate(c *gin.Context) {
 	// 先验证模板
 	validation := engine.ValidateTemplate(req.Template)
 	if !validation.Valid {
-		c.JSON(http.StatusOK, gin.H{
+		common.SuccessResp(c, gin.H{
 			"success": false,
 			"error":   "模板验证失败",
 			"data": gin.H{
@@ -1033,14 +854,11 @@ func (api *ReleaseAPI) PreviewCallbackTemplate(c *gin.Context) {
 	// 渲染预览
 	rendered, err := engine.Preview(req.Template)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"data": gin.H{
 			"rendered":   rendered,
@@ -1063,20 +881,14 @@ func (api *ReleaseAPI) ValidateCallbackTemplate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	engine := callback.NewTemplateEngine()
 	validation := engine.ValidateTemplate(req.Template)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    validation,
-	})
+	common.SuccessResp(c, gin.H{"data": validation})
 }
 
 // GetCallbackTemplateVariables 获取模板变量列表
@@ -1090,7 +902,7 @@ func (api *ReleaseAPI) GetCallbackTemplateVariables(c *gin.Context) {
 	variables := engine.GetAvailableVariables()
 	examples := engine.GetConditionExamples()
 
-	c.JSON(http.StatusOK, gin.H{
+	common.SuccessResp(c, gin.H{
 		"success": true,
 		"data": gin.H{
 			"variables": variables,
@@ -1109,10 +921,7 @@ func (api *ReleaseAPI) GetDefaultCallbackTemplates(c *gin.Context) {
 	engine := callback.NewTemplateEngine()
 	templates := engine.GetDefaultTemplates()
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    templates,
-	})
+	common.SuccessResp(c, gin.H{"data": templates})
 }
 
 // ==================== 消息模板管理 API ====================
@@ -1154,17 +963,11 @@ func (api *ReleaseAPI) ListMessageTemplates(c *gin.Context) {
 
 	var templates []models.MessageTemplate
 	if err := query.Order("is_default DESC, created_at DESC").Find(&templates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    templates,
-	})
+	common.SuccessResp(c, gin.H{"data": templates})
 }
 
 // GetMessageTemplate 获取模板详情
@@ -1183,23 +986,14 @@ func (api *ReleaseAPI) GetMessageTemplate(c *gin.Context) {
 	var template models.MessageTemplate
 	if err := api.db.First(&template, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Template not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Template not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    template,
-	})
+	common.SuccessResp(c, gin.H{"data": template})
 }
 
 // CreateMessageTemplate 创建消息模板
@@ -1218,10 +1012,7 @@ func (api *ReleaseAPI) CreateMessageTemplate(c *gin.Context) {
 
 	var req models.CreateMessageTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -1229,11 +1020,7 @@ func (api *ReleaseAPI) CreateMessageTemplate(c *gin.Context) {
 	engine := callback.NewTemplateEngine()
 	validation := engine.ValidateTemplate(req.Content)
 	if !validation.Valid {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid template syntax",
-			"data":    validation,
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid template syntax")
 		return
 	}
 
@@ -1256,17 +1043,11 @@ func (api *ReleaseAPI) CreateMessageTemplate(c *gin.Context) {
 	template.Variables = extractTemplateVariables(req.Content)
 
 	if err := api.db.Create(&template).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    template,
-	})
+	common.SuccessResp(c, gin.H{"data": template})
 }
 
 // UpdateMessageTemplate 更新消息模板
@@ -1287,34 +1068,22 @@ func (api *ReleaseAPI) UpdateMessageTemplate(c *gin.Context) {
 	var template models.MessageTemplate
 	if err := api.db.First(&template, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Template not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Template not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
 	// 系统模板不允许修改
 	if template.Type == models.MessageTemplateTypeSystem {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "System templates cannot be modified",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "System templates cannot be modified")
 		return
 	}
 
 	var req models.UpdateMessageTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -1323,11 +1092,7 @@ func (api *ReleaseAPI) UpdateMessageTemplate(c *gin.Context) {
 		engine := callback.NewTemplateEngine()
 		validation := engine.ValidateTemplate(req.Content)
 		if !validation.Valid {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid template syntax",
-				"data":    validation,
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Invalid template syntax")
 			return
 		}
 		template.Content = req.Content
@@ -1346,17 +1111,11 @@ func (api *ReleaseAPI) UpdateMessageTemplate(c *gin.Context) {
 	template.IsDefault = req.IsDefault
 
 	if err := api.db.Save(&template).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    template,
-	})
+	common.SuccessResp(c, gin.H{"data": template})
 }
 
 // DeleteMessageTemplate 删除消息模板
@@ -1375,40 +1134,25 @@ func (api *ReleaseAPI) DeleteMessageTemplate(c *gin.Context) {
 	var template models.MessageTemplate
 	if err := api.db.First(&template, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Template not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Template not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
 
 	// 系统模板不允许删除
 	if template.Type == models.MessageTemplateTypeSystem {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "System templates cannot be deleted",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "System templates cannot be deleted")
 		return
 	}
 
 	if err := api.db.Delete(&template).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Template deleted",
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // CopyMessageTemplate 复制消息模板
@@ -1428,15 +1172,9 @@ func (api *ReleaseAPI) CopyMessageTemplate(c *gin.Context) {
 	var source models.MessageTemplate
 	if err := api.db.First(&source, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Template not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "Template not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
+			common.ErrorResp(c, common.CodeInternalError, err.Error())
 		}
 		return
 	}
@@ -1459,17 +1197,11 @@ func (api *ReleaseAPI) CopyMessageTemplate(c *gin.Context) {
 	}
 
 	if err := api.db.Create(&newTemplate).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    newTemplate,
-	})
+	common.SuccessResp(c, gin.H{"data": newTemplate})
 }
 
 // extractTemplateVariables 从模板内容中提取使用的变量

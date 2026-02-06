@@ -310,7 +310,8 @@ const loadConfig = async () => {
       form.namespace = config.namespace
       form.group = config.group
       form.data_id = config.data_id
-      form.type = config.type
+      // 后端返回的是 format，前端使用的是 type
+      form.type = config.format || config.type || 'yaml'
       form.description = config.description || ''
       form.content = config.content || ''
       form.tags = config.tags || []
@@ -328,7 +329,8 @@ const loadVersions = async () => {
   try {
     const res = await configApi.listConfigHistory(props.configId, { page: 1, page_size: 20 })
     if (res.success) {
-      versions.value = res.data.items || []
+      // 后端返回格式: {success: true, items: [...], total: ...}
+      versions.value = res.items || []
     }
   } catch (error) {
     console.error('Failed to load versions:', error)

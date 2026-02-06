@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -154,15 +155,36 @@ func NewStore(db *gorm.DB) (Store, error) {
 
 // AutoMigrate 执行数据库迁移
 func (s *storeImpl) AutoMigrate(ctx context.Context) error {
-	return s.db.WithContext(ctx).AutoMigrate(
-		&AlertRule{},
-		&AlertInstance{},
-		&SilenceRule{},
-		&NotifyChannel{},
-		&NotifyHistory{},
-		&OnCallSchedule{},
-		&OnCallUser{},
-	)
+	models := []struct {
+		name  string
+		model interface{}
+	}{
+		{"alert_rules", &AlertRule{}},
+		{"alert_instances", &AlertInstance{}},
+		{"alert_silence_rules", &SilenceRule{}},
+		{"alert_notify_channels", &NotifyChannel{}},
+		{"alert_notify_history", &NotifyHistory{}},
+		{"alert_oncall_schedules", &OnCallSchedule{}},
+		{"alert_oncall_users", &OnCallUser{}},
+	}
+
+	var errors []string
+	for _, m := range models {
+		if err := s.db.WithContext(ctx).AutoMigrate(m.model); err != nil {
+			// 如果表已存在，记录警告但继续
+			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "Duplicate") {
+				// 表已存在，跳过
+				continue
+			}
+			errors = append(errors, fmt.Sprintf("%s: %v", m.name, err))
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("migration errors: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
 }
 
 // ========== 规则管理 ==========
@@ -610,7 +632,7 @@ func (s *storeImpl) GetAlertStats(ctx context.Context, startTime, endTime *time.
 		}
 	}
 
-	// 通知统计
+	// 通知统计（如果表不存在，返回空统计）
 	historyQuery := s.db.WithContext(ctx).Model(&NotifyHistory{})
 	if startTime != nil {
 		historyQuery = historyQuery.Where("sent_at >= ?", *startTime)
@@ -623,8 +645,19 @@ func (s *storeImpl) GetAlertStats(ctx context.Context, startTime, endTime *time.
 		Status string
 		Count  int64
 	}
+	// 检查表是否存在，如果不存在则跳过通知统计
 	if err := historyQuery.Select("status, count(*) as count").Group("status").Scan(&historyStats).Error; err != nil {
-		return nil, err
+		// 如果表不存在，返回空统计而不是错误
+		errStr := err.Error()
+		if strings.Contains(errStr, "does not exist") || strings.Contains(errStr, "relation") {
+			// 表不存在，返回空统计
+			historyStats = []struct {
+				Status string
+				Count  int64
+			}{}
+		} else {
+			return nil, err
+		}
 	}
 
 	for _, s := range historyStats {

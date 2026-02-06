@@ -46,20 +46,47 @@ request.interceptors.response.use(
     if (newToken) {
       setToken(newToken)
     }
-    return response.data
+
+    // 处理统一响应格式 { code: 0, data: {...}, msg: "..." }
+    const { code, data, msg } = response.data
+
+    if (code === 0) {
+      // 成功：返回 data 字段（自动解包）
+      return data
+    } else {
+      // 业务错误：不自动弹窗，由调用方处理
+      return Promise.reject({ code, msg, data: data || {} })
+    }
   },
   error => {
+    // 网络错误或非 200 响应
     if (error.response) {
-      const { status } = error.response
+      const { status, data } = error.response
+      
+      // 处理 401 未授权
       if (status === 401) {
         removeToken()
         window.location.href = '/login'
       }
-      ElMessage.error(error.response.data?.msg || error.message || '请求失败')
+
+      // 尝试从响应中获取统一格式的错误信息
+      const errorMsg = data?.msg || data?.message || error.message || '请求失败'
+      
+      // 不自动弹窗，由调用方决定如何处理
+      return Promise.reject({ 
+        code: data?.code || status, 
+        msg: errorMsg,
+        data: data?.data || {}
+      })
     } else {
-      ElMessage.error(error.message || '请求失败')
+      // 请求超时或网络断开
+      const errorMsg = error.message || '网络错误，请检查网络连接'
+      return Promise.reject({ 
+        code: -1, 
+        msg: errorMsg,
+        data: {}
+      })
     }
-    return Promise.reject(error)
   }
 )
 

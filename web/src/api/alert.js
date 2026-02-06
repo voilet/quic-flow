@@ -1,4 +1,4 @@
-import request from './index'
+import { request } from './index'
 
 /**
  * 告警系统 API

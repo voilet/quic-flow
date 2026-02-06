@@ -176,10 +176,10 @@ export const configApi = {
   /**
    * 获取配置变更历史
    * @param {string} id - 配置 ID
-   * @param {Object} params - 查询参数
+   * @param {Object} params - 查询参数 {offset, limit, page, page_size}
    */
   listConfigHistory(id, params) {
-    return request.get(`/config/${id}/history`, { params })
+    return request.get(`/config/${id}/changelog`, { params })
   },
 
   /**
@@ -221,7 +221,7 @@ export const configApi = {
    * @param {string} name - 命名空间名称
    */
   deleteNamespace(name) {
-    return request.delete(`/config/namespaces/${name}`)
+    return request.delete(`/config/namespace/${name}`)
   },
 
   /**
@@ -265,5 +265,41 @@ export const configApi = {
    */
   batchAction(data) {
     return request.post('/config/batch', data)
+  },
+
+  // ==================== 订阅者管理 ====================
+
+  /**
+   * 获取订阅者列表
+   * @param {Object} params - 查询参数 {namespace, client_id, status, page, page_size}
+   */
+  listSubscribers(params) {
+    return request.get('/config/subscribers', { params })
+  },
+
+  /**
+   * 获取订阅者详情
+   * @param {string} clientId - 客户端 ID
+   */
+  getSubscriber(clientId) {
+    return request.get(`/config/subscribers/${clientId}`)
+  },
+
+  /**
+   * 断开订阅者连接
+   * @param {string} clientId - 客户端 ID
+   */
+  disconnectSubscriber(clientId) {
+    return request.post(`/config/subscribers/${clientId}/disconnect`)
+  },
+
+  // ==================== 全局灰度规则管理 ====================
+
+  /**
+   * 获取所有灰度规则列表（全局，不限定配置）
+   * @param {Object} params - 查询参数 {config_id, rule_type, enabled, page, page_size}
+   */
+  listAllGrayRules(params) {
+    return request.get('/config/gray-rules', { params })
   }
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/voilet/quic-flow/pkg/audit"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/monitoring"
 )
 
@@ -88,15 +89,11 @@ func (a *AuditAPI) ListCommands(c *gin.Context) {
 
 	commands, err := a.store.QueryCommands(c.Request.Context(), filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
+	common.SuccessResp(c, gin.H{
 		"commands": commands,
 		"count":    len(commands),
 	})
@@ -113,15 +110,11 @@ func (a *AuditAPI) GetCommandsBySession(c *gin.Context) {
 
 	commands, err := a.store.GetCommandsBySession(c.Request.Context(), sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
+	common.SuccessResp(c, gin.H{
 		"session_id": sessionID,
 		"commands":   commands,
 		"count":      len(commands),
@@ -136,17 +129,11 @@ func (a *AuditAPI) GetCommandsBySession(c *gin.Context) {
 func (a *AuditAPI) GetStats(c *gin.Context) {
 	stats, err := a.store.GetStats(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"stats":   stats,
-	})
+	common.SuccessResp(c, stats)
 }
 
 // ExportCommands exports audit logs
@@ -162,10 +149,7 @@ func (a *AuditAPI) ExportCommands(c *gin.Context) {
 		Limit: 100000, // Large limit for export
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -213,15 +197,11 @@ func (a *AuditAPI) CleanupOldRecords(c *gin.Context) {
 
 	deleted, err := a.store.DeleteOldRecords(c.Request.Context(), days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":         true,
+	common.SuccessResp(c, gin.H{
 		"deleted_records": deleted,
 		"older_than_days": days,
 	})

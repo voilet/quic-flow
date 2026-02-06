@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/filetransfer"
 	"gorm.io/gorm"
 )
@@ -76,13 +77,7 @@ func (api *FileTransferAPI) handleInitUpload(c *gin.Context) {
 	var req filetransfer.InitUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fmt.Printf("[DEBUG] Validation failed: %v\n", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid parameters: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid parameters: "+err.Error())
 		return
 	}
 
@@ -99,31 +94,21 @@ func (api *FileTransferAPI) handleInitUpload(c *gin.Context) {
 	resp, err := api.uploadManager.InitUpload(c.Request.Context(), &req, userID, clientIP)
 	if err != nil {
 		fmt.Printf("[DEBUG] InitUpload failed: %v\n", err)
-		statusCode := http.StatusInternalServerError
+		code := common.CodeInternalError
 		if te, ok := err.(*filetransfer.TransferError); ok {
 			switch te.Code {
 			case filetransfer.ErrCodeFileTooLarge:
-				statusCode = http.StatusRequestEntityTooLarge
+				code = common.CodeFileUploadFailed
 			case filetransfer.ErrCodeStorageQuotaExceeded:
-				statusCode = http.StatusInsufficientStorage
+				code = common.CodeFileUploadFailed
 			}
 		}
-
-		c.JSON(statusCode, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, code, err.Error())
 		return
 	}
 
 	fmt.Printf("[DEBUG] InitUpload succeeded, task_id=%s\n", resp.TaskID)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    resp,
-	})
+	common.SuccessResp(c, resp)
 }
 
 // handleUploadChunk 上传分块
@@ -137,50 +122,26 @@ func (api *FileTransferAPI) handleUploadChunk(c *gin.Context) {
 	sequenceStr := c.Query("sequence")
 
 	if taskID == "" || offsetStr == "" || sequenceStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Missing required parameters: task_id, offset, sequence",
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Missing required parameters: task_id, offset, sequence")
 		return
 	}
 
 	offset, err := strconv.ParseInt(offsetStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid offset: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid offset: "+err.Error())
 		return
 	}
 
 	sequence, err := strconv.ParseInt(sequenceStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid sequence: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid sequence: "+err.Error())
 		return
 	}
 
 	// 读取数据
 	data, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Failed to read data: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Failed to read data: "+err.Error())
 		return
 	}
 
@@ -193,59 +154,28 @@ func (api *FileTransferAPI) handleUploadChunk(c *gin.Context) {
 
 	resp, err := api.uploadManager.UploadChunk(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    resp,
-	})
+	common.SuccessResp(c, resp)
 }
 
 // handleCompleteUpload 完成上传
 func (api *FileTransferAPI) handleCompleteUpload(c *gin.Context) {
 	var req filetransfer.CompleteUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid parameters: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid parameters: "+err.Error())
 		return
 	}
 
 	resp, err := api.uploadManager.CompleteUpload(c.Request.Context(), &req)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if te, ok := err.(*filetransfer.TransferError); ok {
-			if te.Code == filetransfer.ErrCodeInvalidChecksum {
-				statusCode = http.StatusBadRequest
-			}
-		}
-
-		c.JSON(statusCode, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    resp,
-	})
+	common.SuccessResp(c, resp)
 }
 
 // handleCancelUpload 取消上传
@@ -253,23 +183,14 @@ func (api *FileTransferAPI) handleCancelUpload(c *gin.Context) {
 	taskID := c.Param("task_id")
 
 	if err := api.uploadManager.CancelUpload(c.Request.Context(), taskID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"task_id":  taskID,
-			"status":   "cancelled",
-			"message":  "Upload cancelled",
-		},
+	common.SuccessResp(c, gin.H{
+		"task_id": taskID,
+		"status":  "cancelled",
+		"message": "Upload cancelled",
 	})
 }
 
@@ -277,13 +198,7 @@ func (api *FileTransferAPI) handleCancelUpload(c *gin.Context) {
 func (api *FileTransferAPI) handleRequestDownload(c *gin.Context) {
 	var req filetransfer.RequestDownloadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid parameters: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid parameters: "+err.Error())
 		return
 	}
 
@@ -295,20 +210,11 @@ func (api *FileTransferAPI) handleRequestDownload(c *gin.Context) {
 
 	resp, err := api.downloadMgr.RequestDownload(c.Request.Context(), &req, userID, clientIP)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    resp,
-	})
+	common.SuccessResp(c, resp)
 }
 
 // handleDownloadFile 下载文件（流式）
@@ -317,13 +223,7 @@ func (api *FileTransferAPI) handleDownloadFile(c *gin.Context) {
 
 	reader, fileInfo, err := api.downloadMgr.StartDownload(c.Request.Context(), taskID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 	defer reader.Close()
@@ -348,37 +248,22 @@ func (api *FileTransferAPI) handleResumeDownload(c *gin.Context) {
 		Offset int64  `json:"offset"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid parameters: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid parameters: "+err.Error())
 		return
 	}
 
 	if err := api.downloadMgr.ResumeDownload(c.Request.Context(), req.TaskID, req.Offset); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	progress, _ := api.manager.GetProgress(req.TaskID)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"task_id":  req.TaskID,
-			"status":   "resuming",
-			"offset":   req.Offset,
-			"progress": progress,
-		},
+	common.SuccessResp(c, gin.H{
+		"task_id":  req.TaskID,
+		"status":   "resuming",
+		"offset":   req.Offset,
+		"progress": progress,
 	})
 }
 
@@ -387,23 +272,14 @@ func (api *FileTransferAPI) handleCancelDownload(c *gin.Context) {
 	taskID := c.Param("task_id")
 
 	if err := api.downloadMgr.CancelDownload(c.Request.Context(), taskID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"task_id":  taskID,
-			"status":   "cancelled",
-			"message":  "Download cancelled",
-		},
+	common.SuccessResp(c, gin.H{
+		"task_id": taskID,
+		"status":  "cancelled",
+		"message": "Download cancelled",
 	})
 }
 
@@ -413,20 +289,11 @@ func (api *FileTransferAPI) handleGetProgress(c *gin.Context) {
 
 	progress, ok := api.manager.GetProgress(taskID)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeTaskNotFound,
-				"message": "Task not found",
-			},
-		})
+		common.ErrorResp(c, common.CodeNotFound, "Task not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    progress,
-	})
+	common.SuccessResp(c, progress)
 }
 
 // handleBatchStatus 批量查询状态
@@ -435,13 +302,7 @@ func (api *FileTransferAPI) handleBatchStatus(c *gin.Context) {
 		TaskIDs []string `json:"task_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid parameters: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid parameters: "+err.Error())
 		return
 	}
 
@@ -456,11 +317,8 @@ func (api *FileTransferAPI) handleBatchStatus(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"tasks": tasks,
-		},
+	common.SuccessResp(c, gin.H{
+		"tasks": tasks,
 	})
 }
 
@@ -488,13 +346,7 @@ func (api *FileTransferAPI) handleListTransfers(c *gin.Context) {
 	// 获取总数
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    "DATABASE_ERROR",
-				"message": "Failed to count transfers: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to count transfers: "+err.Error())
 		return
 	}
 
@@ -518,13 +370,7 @@ func (api *FileTransferAPI) handleListTransfers(c *gin.Context) {
 	// 查询数据
 	var transfers []filetransfer.FileTransfer
 	if err := query.Find(&transfers).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    "DATABASE_ERROR",
-				"message": "Failed to query transfers: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to query transfers: "+err.Error())
 		return
 	}
 
@@ -532,40 +378,37 @@ func (api *FileTransferAPI) handleListTransfers(c *gin.Context) {
 	items := make([]gin.H, len(transfers))
 	for i, t := range transfers {
 		items[i] = gin.H{
-			"id":               t.ID,
-			"task_id":          t.TaskID,
-			"file_name":        t.FileName,
-			"file_path":        t.FilePath,
-			"file_size":        t.FileSize,
-			"file_hash":        t.FileHash,
-			"type":             t.TransferType,
-			"status":           t.Status,
-			"progress":         t.Progress,
-			"speed":            t.Speed,
+			"id":                t.ID,
+			"task_id":           t.TaskID,
+			"file_name":         t.FileName,
+			"file_path":         t.FilePath,
+			"file_size":         t.FileSize,
+			"file_hash":         t.FileHash,
+			"type":              t.TransferType,
+			"status":            t.Status,
+			"progress":          t.Progress,
+			"speed":             t.Speed,
 			"bytes_transferred": t.BytesTransferred,
-			"user_id":          t.UserID,
-			"client_ip":        t.ClientIP,
-			"error_message":    t.ErrorMessage,
-			"started_at":       t.StartedAt,
-			"completed_at":     t.CompletedAt,
-			"created_at":       t.CreatedAt,
-			"updated_at":       t.UpdatedAt,
+			"user_id":           t.UserID,
+			"client_ip":         t.ClientIP,
+			"error_message":     t.ErrorMessage,
+			"started_at":        t.StartedAt,
+			"completed_at":      t.CompletedAt,
+			"created_at":        t.CreatedAt,
+			"updated_at":        t.UpdatedAt,
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"total":     total,
-			"page":      (offset / limit) + 1,
-			"page_size": limit,
-			"items":     items,
-			"filters": gin.H{
-				"type":        transferType,
-				"status":      status,
-				"sort_by":     sortBy,
-				"sort_order":  sortOrder,
-			},
+	common.SuccessResp(c, gin.H{
+		"total":     total,
+		"page":      (offset / limit) + 1,
+		"page_size": limit,
+		"items":     items,
+		"filters": gin.H{
+			"type":       transferType,
+			"status":     status,
+			"sort_by":    sortBy,
+			"sort_order": sortOrder,
 		},
 	})
 }
@@ -576,20 +419,11 @@ func (api *FileTransferAPI) handleGetTask(c *gin.Context) {
 
 	task, err := api.manager.GetTask(taskID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.GetErrorCode(err),
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    task,
-	})
+	common.SuccessResp(c, task)
 }
 
 // handleListFiles 列出文件
@@ -599,23 +433,14 @@ func (api *FileTransferAPI) handleListFiles(c *gin.Context) {
 
 	files, err := api.downloadMgr.ListFiles(c.Request.Context(), prefix, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeStorageError,
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"path":  prefix,
-			"files": files,
-			"total": len(files),
-		},
+	common.SuccessResp(c, gin.H{
+		"path":  prefix,
+		"files": files,
+		"total": len(files),
 	})
 }
 
@@ -626,10 +451,7 @@ func (api *FileTransferAPI) handleGetFileInfo(c *gin.Context) {
 	// TODO: 实现获取文件信息
 	_ = fileID
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    gin.H{},
-	})
+	common.SuccessResp(c, gin.H{})
 }
 
 // handleDeleteFile 删除文件
@@ -639,12 +461,9 @@ func (api *FileTransferAPI) handleDeleteFile(c *gin.Context) {
 	// TODO: 实现删除文件
 	_ = fileID
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"file_id": fileID,
-			"status":  "deleted",
-		},
+	common.SuccessResp(c, gin.H{
+		"file_id": fileID,
+		"status":  "deleted",
 	})
 }
 
@@ -658,13 +477,7 @@ func (api *FileTransferAPI) handleUpdateMetadata(c *gin.Context) {
 		Metadata    map[string]interface{} `json:"metadata"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeInvalidParameters,
-				"message": "Invalid parameters: " + err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid parameters: "+err.Error())
 		return
 	}
 
@@ -673,12 +486,9 @@ func (api *FileTransferAPI) handleUpdateMetadata(c *gin.Context) {
 
 	// TODO: 实现更新元数据
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"file_id":       fileID,
-			"updated_fields": []string{"description", "tags"},
-		},
+	common.SuccessResp(c, gin.H{
+		"file_id":        fileID,
+		"updated_fields": []string{"description", "tags"},
 	})
 }
 
@@ -691,18 +501,15 @@ func (api *FileTransferAPI) handleGetQuota(c *gin.Context) {
 
 	// 为匿名用户返回默认配额
 	if userID == "anonymous" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data": gin.H{
-				"total":            107374182400, // 100GB
-				"used":             0,
-				"available":        107374182400,
-				"usage_percentage": 0,
-				"formatted": gin.H{
-					"total":     "100 GB",
-					"used":      "0 B",
-					"available": "100 GB",
-				},
+		common.SuccessResp(c, gin.H{
+			"total":            107374182400, // 100GB
+			"used":             0,
+			"available":        107374182400,
+			"usage_percentage": 0,
+			"formatted": gin.H{
+				"total":     "100 GB",
+				"used":      "0 B",
+				"available": "100 GB",
 			},
 		})
 		return
@@ -710,30 +517,18 @@ func (api *FileTransferAPI) handleGetQuota(c *gin.Context) {
 
 	quota, err := api.manager.GetUserQuotaInfo(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    filetransfer.ErrCodeStorageError,
-				"message": err.Error(),
-			},
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    quota,
-	})
+	common.SuccessResp(c, quota)
 }
 
 // handleGetConfig 获取配置
 func (api *FileTransferAPI) handleGetConfig(c *gin.Context) {
 	config := api.manager.GetSystemConfig()
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    config,
-	})
+	common.SuccessResp(c, config)
 }
 
 // handleWebSocketProgress WebSocket 进度推送

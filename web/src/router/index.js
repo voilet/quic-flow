@@ -135,6 +135,30 @@ const routes = [
     meta: { title: '配置中心' }
   },
   {
+    path: '/config/history',
+    name: 'ConfigHistory',
+    component: () => import('@/views/ConfigList.vue'),
+    meta: { title: '配置历史' }
+  },
+  {
+    path: '/config/releases',
+    name: 'ConfigReleases',
+    component: () => import('@/views/config/Releases.vue'),
+    meta: { title: '发布管理' }
+  },
+  {
+    path: '/config/gray-rules',
+    name: 'ConfigGrayRules',
+    component: () => import('@/views/config/GrayRules.vue'),
+    meta: { title: '灰度规则' }
+  },
+  {
+    path: '/config/subscribers',
+    name: 'ConfigSubscribers',
+    component: () => import('@/views/config/Subscribers.vue'),
+    meta: { title: '订阅者' }
+  },
+  {
     path: '/alerts',
     name: 'AlertList',
     component: () => import('@/views/AlertList.vue'),
@@ -174,13 +198,14 @@ const routes = [
   {
     path: '/project/config',
     name: 'ProjectConfig',
-    component: () => import('@/views/config/ConfigList.vue'),
+    component: () => import('@/views/ConfigList.vue'),
     meta: { title: '配置中心' }
   },
+  
   {
     path: '/project/config/history',
     name: 'ProjectConfigHistory',
-    component: () => import('@/views/config/ConfigHistoryDialog.vue'),
+    component: () => import('@/views/ConfigList.vue'),
     meta: { title: '配置历史' }
   },
   {
@@ -188,6 +213,24 @@ const routes = [
     name: 'ProjectPipeline',
     component: () => import('@/views/pipeline/List.vue'),
     meta: { title: '流水线列表' }
+  },
+  {
+    path: '/project/pipeline/editor',
+    name: 'ProjectPipelineEditor',
+    component: () => import('@/views/pipeline/Editor.vue'),
+    meta: { title: '流水线编辑器' }
+  },
+  {
+    path: '/project/pipeline/editor/:id',
+    name: 'ProjectPipelineEditorEdit',
+    component: () => import('@/views/pipeline/Editor.vue'),
+    meta: { title: '编辑流水线' }
+  },
+  {
+    path: '/project/pipeline/templates',
+    name: 'ProjectPipelineTemplates',
+    component: () => import('@/views/pipeline/Templates.vue'),
+    meta: { title: '模板管理' }
   },
   {
     path: '/project/executions',
@@ -207,6 +250,42 @@ const routes = [
     component: () => import('@/views/AlertRules.vue'),
     meta: { title: '告警规则' }
   },
+  {
+    path: '/project/alert-channels',
+    name: 'ProjectAlertChannels',
+    component: () => import('@/views/AlertChannels.vue'),
+    meta: { title: '通知渠道' }
+  },
+  {
+    path: '/project/silence-rules',
+    name: 'ProjectSilenceRules',
+    component: () => import('@/views/SilenceRules.vue'),
+    meta: { title: '抑制规则' }
+  },
+  {
+    path: '/project/oncall',
+    name: 'ProjectOnCall',
+    component: () => import('@/views/OnCallSchedule.vue'),
+    meta: { title: '值班管理' }
+  },
+  {
+    path: '/project/config/gray-rules',
+    name: 'ProjectConfigGrayRules',
+    component: () => import('@/views/config/GrayRules.vue'),
+    meta: { title: '灰度规则' }
+  },
+  {
+    path: '/project/config/subscribers',
+    name: 'ProjectConfigSubscribers',
+    component: () => import('@/views/config/Subscribers.vue'),
+    meta: { title: '订阅者' }
+  },
+  {
+    path: '/project/config/releases',
+    name: 'ProjectConfigReleases',
+    component: () => import('@/views/config/Releases.vue'),
+    meta: { title: '发布管理' }
+  },
   // 兼容旧路由
   {
     path: '/pipeline',
@@ -218,10 +297,6 @@ const routes = [
   },
   {
     path: '/pipeline/execute',
-    redirect: '/'
-  },
-  {
-    path: '/config',
     redirect: '/'
   }
 ]

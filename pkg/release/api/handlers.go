@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // ReleaseAPI 发布系统 API
@@ -81,10 +81,7 @@ func (api *ReleaseAPI) SetDB(db *gorm.DB) {
 // checkDB 检查数据库是否配置
 func (api *ReleaseAPI) checkDB(c *gin.Context) bool {
 	if api.db == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"success": false,
-			"error":   "Database not configured. Release system requires database setup.",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Database not configured. Release system requires database setup.")
 		return false
 	}
 	return true
@@ -287,7 +284,7 @@ func (api *ReleaseAPI) CreateProject(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -303,11 +300,11 @@ func (api *ReleaseAPI) CreateProject(c *gin.Context) {
 	}
 
 	if err := api.db.Create(project).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "project": project})
+	common.SuccessResp(c, project)
 }
 
 // ListProjects 列出项目
@@ -317,7 +314,7 @@ func (api *ReleaseAPI) ListProjects(c *gin.Context) {
 	}
 	var projects []models.Project
 	if err := api.db.Find(&projects).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -337,7 +334,7 @@ func (api *ReleaseAPI) ListProjects(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "projects": result})
+	common.SuccessResp(c, result)
 }
 
 // GetProject 获取项目详情
@@ -345,11 +342,11 @@ func (api *ReleaseAPI) GetProject(c *gin.Context) {
 	id := c.Param("id")
 	var project models.Project
 	if err := api.db.Preload("Environments").Preload("Pipelines").First(&project, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "project not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "project not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "project": project})
+	common.SuccessResp(c, project)
 }
 
 // UpdateProject 更新项目
@@ -357,7 +354,7 @@ func (api *ReleaseAPI) UpdateProject(c *gin.Context) {
 	id := c.Param("id")
 	var project models.Project
 	if err := api.db.First(&project, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "project not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "project not found")
 		return
 	}
 
@@ -371,7 +368,7 @@ func (api *ReleaseAPI) UpdateProject(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -395,22 +392,22 @@ func (api *ReleaseAPI) UpdateProject(c *gin.Context) {
 	}
 
 	if err := api.db.Save(&project).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "project": project})
+	common.SuccessResp(c, project)
 }
 
 // DeleteProject 删除项目
 func (api *ReleaseAPI) DeleteProject(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Project{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 环境管理 ====================
@@ -428,7 +425,7 @@ func (api *ReleaseAPI) CreateEnvironment(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -442,11 +439,11 @@ func (api *ReleaseAPI) CreateEnvironment(c *gin.Context) {
 	}
 
 	if err := api.db.Create(env).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "environment": env})
+	common.SuccessResp(c, env)
 }
 
 // ListEnvironments 列出环境
@@ -454,11 +451,11 @@ func (api *ReleaseAPI) ListEnvironments(c *gin.Context) {
 	projectID := c.Param("id")
 	var envs []models.Environment
 	if err := api.db.Where("project_id = ?", projectID).Find(&envs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "environments": envs})
+	common.SuccessResp(c, envs)
 }
 
 // GetEnvironment 获取环境详情
@@ -466,11 +463,11 @@ func (api *ReleaseAPI) GetEnvironment(c *gin.Context) {
 	id := c.Param("id")
 	var env models.Environment
 	if err := api.db.Preload("Targets").First(&env, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "environment not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "environment not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "environment": env})
+	common.SuccessResp(c, env)
 }
 
 // UpdateEnvironment 更新环境
@@ -478,32 +475,32 @@ func (api *ReleaseAPI) UpdateEnvironment(c *gin.Context) {
 	id := c.Param("id")
 	var env models.Environment
 	if err := api.db.First(&env, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "environment not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "environment not found")
 		return
 	}
 
 	if err := c.ShouldBindJSON(&env); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.db.Save(&env).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "environment": env})
+	common.SuccessResp(c, env)
 }
 
 // DeleteEnvironment 删除环境
 func (api *ReleaseAPI) DeleteEnvironment(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Environment{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 目标管理 ====================
@@ -522,7 +519,7 @@ func (api *ReleaseAPI) CreateTarget(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -538,11 +535,11 @@ func (api *ReleaseAPI) CreateTarget(c *gin.Context) {
 	}
 
 	if err := api.db.Create(target).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "target": target})
+	common.SuccessResp(c, gin.H{"target": target})
 }
 
 // ListTargets 列出目标
@@ -550,11 +547,11 @@ func (api *ReleaseAPI) ListTargets(c *gin.Context) {
 	envID := c.Param("id")
 	var targets []models.Target
 	if err := api.db.Where("environment_id = ?", envID).Find(&targets).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "targets": targets})
+	common.SuccessResp(c, gin.H{"targets": targets})
 }
 
 // GetTarget 获取目标详情
@@ -562,11 +559,11 @@ func (api *ReleaseAPI) GetTarget(c *gin.Context) {
 	id := c.Param("id")
 	var target models.Target
 	if err := api.db.First(&target, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "target not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "target not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "target": target})
+	common.SuccessResp(c, gin.H{"target": target})
 }
 
 // UpdateTarget 更新目标
@@ -574,32 +571,32 @@ func (api *ReleaseAPI) UpdateTarget(c *gin.Context) {
 	id := c.Param("id")
 	var target models.Target
 	if err := api.db.First(&target, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "target not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "target not found")
 		return
 	}
 
 	if err := c.ShouldBindJSON(&target); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.db.Save(&target).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "target": target})
+	common.SuccessResp(c, gin.H{"target": target})
 }
 
 // DeleteTarget 删除目标
 func (api *ReleaseAPI) DeleteTarget(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Target{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 流水线管理 ====================
@@ -616,7 +613,7 @@ func (api *ReleaseAPI) CreatePipeline(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -629,11 +626,11 @@ func (api *ReleaseAPI) CreatePipeline(c *gin.Context) {
 	}
 
 	if err := api.db.Create(pipeline).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "pipeline": pipeline})
+	common.SuccessResp(c, pipeline)
 }
 
 // ListPipelines 列出流水线
@@ -641,11 +638,11 @@ func (api *ReleaseAPI) ListPipelines(c *gin.Context) {
 	projectID := c.Param("id")
 	var pipelines []models.Pipeline
 	if err := api.db.Where("project_id = ?", projectID).Find(&pipelines).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "pipelines": pipelines})
+	common.SuccessResp(c, pipelines)
 }
 
 // GetPipeline 获取流水线详情
@@ -653,11 +650,11 @@ func (api *ReleaseAPI) GetPipeline(c *gin.Context) {
 	id := c.Param("id")
 	var pipeline models.Pipeline
 	if err := api.db.First(&pipeline, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "pipeline not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "pipeline not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "pipeline": pipeline})
+	common.SuccessResp(c, pipeline)
 }
 
 // UpdatePipeline 更新流水线
@@ -665,32 +662,32 @@ func (api *ReleaseAPI) UpdatePipeline(c *gin.Context) {
 	id := c.Param("id")
 	var pipeline models.Pipeline
 	if err := api.db.First(&pipeline, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "pipeline not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "pipeline not found")
 		return
 	}
 
 	if err := c.ShouldBindJSON(&pipeline); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.db.Save(&pipeline).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "pipeline": pipeline})
+	common.SuccessResp(c, pipeline)
 }
 
 // DeletePipeline 删除流水线
 func (api *ReleaseAPI) DeletePipeline(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Pipeline{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 变量管理 ====================
@@ -699,16 +696,16 @@ func (api *ReleaseAPI) DeletePipeline(c *gin.Context) {
 func (api *ReleaseAPI) CreateVariable(c *gin.Context) {
 	var req models.Variable
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.db.Create(&req).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "variable": req})
+	common.SuccessResp(c, gin.H{"variable": req})
 }
 
 // ListProjectVariables 列出项目变量
@@ -716,11 +713,11 @@ func (api *ReleaseAPI) ListProjectVariables(c *gin.Context) {
 	projectID := c.Param("id")
 	var vars []models.Variable
 	if err := api.db.Where("project_id = ?", projectID).Find(&vars).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "variables": vars})
+	common.SuccessResp(c, gin.H{"variables": vars})
 }
 
 // ListEnvVariables 列出环境变量
@@ -728,11 +725,11 @@ func (api *ReleaseAPI) ListEnvVariables(c *gin.Context) {
 	envID := c.Param("id")
 	var vars []models.Variable
 	if err := api.db.Where("environment_id = ?", envID).Find(&vars).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "variables": vars})
+	common.SuccessResp(c, gin.H{"variables": vars})
 }
 
 // UpdateVariable 更新变量
@@ -740,32 +737,32 @@ func (api *ReleaseAPI) UpdateVariable(c *gin.Context) {
 	id := c.Param("id")
 	var variable models.Variable
 	if err := api.db.First(&variable, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "variable not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "variable not found")
 		return
 	}
 
 	if err := c.ShouldBindJSON(&variable); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.db.Save(&variable).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "variable": variable})
+	common.SuccessResp(c, variable)
 }
 
 // DeleteVariable 删除变量
 func (api *ReleaseAPI) DeleteVariable(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Variable{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 发布管理 ====================
@@ -774,7 +771,7 @@ func (api *ReleaseAPI) DeleteVariable(c *gin.Context) {
 func (api *ReleaseAPI) CreateRelease(c *gin.Context) {
 	var req engine.CreateReleaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -783,11 +780,11 @@ func (api *ReleaseAPI) CreateRelease(c *gin.Context) {
 
 	release, err := api.engine.CreateRelease(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "release": release})
+	common.SuccessResp(c, release)
 }
 
 // ListReleases 列出发布
@@ -801,11 +798,11 @@ func (api *ReleaseAPI) ListReleases(c *gin.Context) {
 
 	releases, total, err := api.engine.ListReleases(c.Request.Context(), projectID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "releases": releases, "total": total})
+	common.SuccessResp(c, gin.H{"releases": releases, "total": total})
 }
 
 // GetRelease 获取发布详情
@@ -813,33 +810,33 @@ func (api *ReleaseAPI) GetRelease(c *gin.Context) {
 	id := c.Param("id")
 	release, err := api.engine.GetRelease(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "release not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "release not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "release": release})
+	common.SuccessResp(c, release)
 }
 
 // StartRelease 开始发布
 func (api *ReleaseAPI) StartRelease(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.engine.StartRelease(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // CancelRelease 取消发布
 func (api *ReleaseAPI) CancelRelease(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.engine.CancelRelease(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // RollbackRelease 回滚发布
@@ -854,7 +851,7 @@ func (api *ReleaseAPI) RollbackRelease(c *gin.Context) {
 	// 获取原发布信息
 	var release models.Release
 	if err := api.db.First(&release, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "release not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "release not found")
 		return
 	}
 
@@ -871,35 +868,35 @@ func (api *ReleaseAPI) RollbackRelease(c *gin.Context) {
 
 	rollback, err := api.engine.CreateRelease(c.Request.Context(), rollbackReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 自动开始回滚
 	if err := api.engine.StartRelease(c.Request.Context(), rollback.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "release": rollback})
+	common.SuccessResp(c, rollback)
 }
 
 // PromoteRelease 金丝雀全量发布
 func (api *ReleaseAPI) PromoteRelease(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.engine.PromoteCanary(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // InstallService 安装服务
 func (api *ReleaseAPI) InstallService(c *gin.Context) {
 	var req engine.CreateReleaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -908,24 +905,24 @@ func (api *ReleaseAPI) InstallService(c *gin.Context) {
 
 	release, err := api.engine.CreateRelease(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 自动开始
 	if err := api.engine.StartRelease(c.Request.Context(), release.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "release": release})
+	common.SuccessResp(c, release)
 }
 
 // UpdateService 更新服务
 func (api *ReleaseAPI) UpdateService(c *gin.Context) {
 	var req engine.CreateReleaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -934,23 +931,23 @@ func (api *ReleaseAPI) UpdateService(c *gin.Context) {
 
 	release, err := api.engine.CreateRelease(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.engine.StartRelease(c.Request.Context(), release.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "release": release})
+	common.SuccessResp(c, release)
 }
 
 // UninstallService 卸载服务
 func (api *ReleaseAPI) UninstallService(c *gin.Context) {
 	var req engine.CreateReleaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -959,16 +956,16 @@ func (api *ReleaseAPI) UninstallService(c *gin.Context) {
 
 	release, err := api.engine.CreateRelease(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	if err := api.engine.StartRelease(c.Request.Context(), release.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "release": release})
+	common.SuccessResp(c, release)
 }
 
 // ==================== 审批管理 ====================
@@ -977,11 +974,11 @@ func (api *ReleaseAPI) UninstallService(c *gin.Context) {
 func (api *ReleaseAPI) ListApprovals(c *gin.Context) {
 	var approvals []models.Approval
 	if err := api.db.Where("status = ?", models.ApprovalStatusPending).Find(&approvals).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "approvals": approvals})
+	common.SuccessResp(c, gin.H{"approvals": approvals})
 }
 
 // ApproveRelease 同意发布
@@ -989,7 +986,7 @@ func (api *ReleaseAPI) ApproveRelease(c *gin.Context) {
 	id := c.Param("id")
 	var approval models.Approval
 	if err := api.db.First(&approval, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "approval not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "approval not found")
 		return
 	}
 
@@ -998,17 +995,17 @@ func (api *ReleaseAPI) ApproveRelease(c *gin.Context) {
 	approval.ApprovedBy = &approver
 
 	if err := api.db.Save(&approval).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 自动开始发布
 	if err := api.engine.StartRelease(c.Request.Context(), approval.ReleaseID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // RejectRelease 拒绝发布
@@ -1016,7 +1013,7 @@ func (api *ReleaseAPI) RejectRelease(c *gin.Context) {
 	id := c.Param("id")
 	var approval models.Approval
 	if err := api.db.First(&approval, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "approval not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "approval not found")
 		return
 	}
 
@@ -1031,7 +1028,7 @@ func (api *ReleaseAPI) RejectRelease(c *gin.Context) {
 	approval.Comment = req.Comment
 
 	if err := api.db.Save(&approval).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -1041,7 +1038,7 @@ func (api *ReleaseAPI) RejectRelease(c *gin.Context) {
 		"finished_at": time.Now(),
 	})
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 版本管理 ====================
@@ -1075,14 +1072,14 @@ func (api *ReleaseAPI) CreateVersion(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 检查项目是否存在
 	var project models.Project
 	if err := api.db.First(&project, "id = ?", projectID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "project not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "project not found")
 		return
 	}
 
@@ -1090,17 +1087,13 @@ func (api *ReleaseAPI) CreateVersion(c *gin.Context) {
 	if project.Type == models.DeployTypeScript && !req.SkipValidation {
 		// 安装脚本必须有
 		if strings.TrimSpace(req.InstallScript) == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "安装脚本不能为空"})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "安装脚本不能为空")
 			return
 		}
 
 		valid, errors := validateAllScripts(req.InstallScript, req.UpdateScript, req.RollbackScript, req.UninstallScript)
 		if !valid {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success":          false,
-				"error":            "脚本语法验证失败",
-				"validation_errors": errors,
-			})
+			common.ErrorRespWithData(c, common.CodeInvalidParams, gin.H{"validation_errors": errors}, "脚本语法验证失败")
 			return
 		}
 	}
@@ -1154,11 +1147,11 @@ func (api *ReleaseAPI) CreateVersion(c *gin.Context) {
 	}
 
 	if err := api.db.Create(version).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "version": version})
+	common.SuccessResp(c, version)
 }
 
 // ListVersions 列出版本
@@ -1169,11 +1162,11 @@ func (api *ReleaseAPI) ListVersions(c *gin.Context) {
 	projectID := c.Param("id")
 	var versions []models.Version
 	if err := api.db.Where("project_id = ?", projectID).Order("created_at DESC").Find(&versions).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "versions": versions})
+	common.SuccessResp(c, versions)
 }
 
 // GetVersion 获取版本详情
@@ -1184,11 +1177,11 @@ func (api *ReleaseAPI) GetVersion(c *gin.Context) {
 	id := c.Param("id")
 	var version models.Version
 	if err := api.db.First(&version, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "version not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "version not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "version": version})
+	common.SuccessResp(c, version)
 }
 
 // UpdateVersion 更新版本
@@ -1199,7 +1192,7 @@ func (api *ReleaseAPI) UpdateVersion(c *gin.Context) {
 	id := c.Param("id")
 	var version models.Version
 	if err := api.db.First(&version, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "version not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "version not found")
 		return
 	}
 
@@ -1221,7 +1214,7 @@ func (api *ReleaseAPI) UpdateVersion(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -1265,11 +1258,11 @@ func (api *ReleaseAPI) UpdateVersion(c *gin.Context) {
 	}
 
 	if err := api.db.Save(&version).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "version": version})
+	common.SuccessResp(c, version)
 }
 
 // DeleteVersion 删除版本
@@ -1279,11 +1272,11 @@ func (api *ReleaseAPI) DeleteVersion(c *gin.Context) {
 	}
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Version{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // ==================== 部署任务管理 ====================
@@ -1315,14 +1308,14 @@ func (api *ReleaseAPI) CreateDeployTask(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 获取版本信息
 	var version models.Version
 	if err := api.db.First(&version, "id = ?", req.VersionID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "version not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "version not found")
 		return
 	}
 
@@ -1338,7 +1331,7 @@ func (api *ReleaseAPI) CreateDeployTask(c *gin.Context) {
 			selectedFromVersion = req.SourceVersion
 		}
 		if err := query.Find(&installations).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to query installations: " + err.Error()})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "failed to query installations: ")
 			return
 		}
 
@@ -1359,17 +1352,11 @@ func (api *ReleaseAPI) CreateDeployTask(c *gin.Context) {
 		}
 
 		if len(clientIDs) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "no installed clients found for auto selection",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "no installed clients found for auto selection")
 			return
 		}
 	} else if len(clientIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "client_ids is required when auto_select_clients is false",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "client_ids is required when auto_select_clients is false")
 		return
 	}
 
@@ -1434,11 +1421,11 @@ func (api *ReleaseAPI) CreateDeployTask(c *gin.Context) {
 	}
 
 	if err := api.db.Create(task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "task": task})
+	common.SuccessResp(c, gin.H{"task": task})
 }
 
 // ListDeployTasks 列出部署任务
@@ -1456,11 +1443,11 @@ func (api *ReleaseAPI) ListDeployTasks(c *gin.Context) {
 
 	var tasks []models.DeployTask
 	if err := query.Order("created_at DESC").Find(&tasks).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "tasks": tasks})
+	common.SuccessResp(c, gin.H{"tasks": tasks})
 }
 
 // GetDeployTask 获取部署任务详情
@@ -1471,11 +1458,11 @@ func (api *ReleaseAPI) GetDeployTask(c *gin.Context) {
 	id := c.Param("id")
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "task": task})
+	common.SuccessResp(c, gin.H{"task": task})
 }
 
 // StartDeployTask 开始部署任务
@@ -1487,12 +1474,12 @@ func (api *ReleaseAPI) StartDeployTask(c *gin.Context) {
 
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
 	if task.Status != "pending" && task.Status != "scheduled" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "task cannot be started"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task cannot be started")
 		return
 	}
 
@@ -1506,14 +1493,14 @@ func (api *ReleaseAPI) StartDeployTask(c *gin.Context) {
 	}
 
 	if err := api.db.Save(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 触发实际的部署执行
 	go api.executeDeployTask(&task)
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "task": task})
+	common.SuccessResp(c, gin.H{"task": task})
 }
 
 // CancelDeployTask 取消部署任务
@@ -1525,12 +1512,12 @@ func (api *ReleaseAPI) CancelDeployTask(c *gin.Context) {
 
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
 	if task.Status == "completed" || task.Status == "cancelled" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "task cannot be cancelled"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task cannot be cancelled")
 		return
 	}
 
@@ -1539,11 +1526,11 @@ func (api *ReleaseAPI) CancelDeployTask(c *gin.Context) {
 	task.FinishedAt = &now
 
 	if err := api.db.Save(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // PauseDeployTask 暂停部署任务
@@ -1555,23 +1542,23 @@ func (api *ReleaseAPI) PauseDeployTask(c *gin.Context) {
 
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
 	if task.Status != "running" && task.Status != "canary" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "task cannot be paused"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task cannot be paused")
 		return
 	}
 
 	task.Status = "paused"
 
 	if err := api.db.Save(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // PromoteDeployTask 金丝雀全量发布
@@ -1583,26 +1570,26 @@ func (api *ReleaseAPI) PromoteDeployTask(c *gin.Context) {
 
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
 	if task.Status != "canary" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "task is not in canary status"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task is not in canary status")
 		return
 	}
 
 	task.Status = "running"
 
 	if err := api.db.Save(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 触发剩余节点的部署
 	go api.promoteDeployTask(&task)
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // RollbackDeployTask 回滚部署任务
@@ -1614,26 +1601,26 @@ func (api *ReleaseAPI) RollbackDeployTask(c *gin.Context) {
 
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
 	if task.Status != "canary" && task.Status != "running" && task.Status != "failed" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "task cannot be rolled back"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task cannot be rolled back")
 		return
 	}
 
 	// 获取版本的回滚脚本
 	var version models.Version
 	if err := api.db.First(&version, "id = ?", task.VersionID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "version not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "version not found")
 		return
 	}
 
 	// 触发回滚执行
 	go api.rollbackDeployTask(&task, &version)
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	common.SuccessResp(c, gin.H{})
 }
 
 // executeDeployTask 执行部署任务（内部方法）
@@ -2082,11 +2069,11 @@ func (api *ReleaseAPI) ListDeployLogs(c *gin.Context) {
 	if err := query.Order("deploy_logs.created_at DESC").
 		Limit(limit).Offset(offset).
 		Scan(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "logs": logs, "total": total})
+	common.SuccessResp(c, gin.H{"logs": logs, "total": total})
 }
 
 // GetDeployLog 获取部署日志详情
@@ -2097,11 +2084,11 @@ func (api *ReleaseAPI) GetDeployLog(c *gin.Context) {
 	id := c.Param("id")
 	var log models.DeployLog
 	if err := api.db.First(&log, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "log not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "log not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "log": log})
+	common.SuccessResp(c, log)
 }
 
 // ListProjectDeployLogs 列出项目的部署日志
@@ -2124,11 +2111,11 @@ func (api *ReleaseAPI) ListProjectDeployLogs(c *gin.Context) {
 
 	var logs []models.DeployLog
 	if err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "logs": logs, "total": total})
+	common.SuccessResp(c, gin.H{"logs": logs, "total": total})
 }
 
 // GetProjectDeployStats 获取项目的部署统计
@@ -2197,12 +2184,7 @@ func (api *ReleaseAPI) GetProjectDeployStats(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"stats":         stats,
-		"daily_stats":   dailyStats,
-		"client_stats":  clientStats,
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "操作成功")
 }
 
 // GetDeployStats 获取整体部署统计
@@ -2262,12 +2244,7 @@ func (api *ReleaseAPI) GetDeployStats(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":        true,
-		"stats":          stats,
-		"running_count":  runningCount,
-		"project_stats":  projectStats,
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "操作成功")
 }
 
 // parseContainerIDFromOutput 从部署输出中解析 Container ID
@@ -2346,15 +2323,11 @@ func (api *ReleaseAPI) GetDeployTaskLogs(c *gin.Context) {
 
 	var logs []models.DeployTaskLog
 	if err := query.Order("timestamp ASC").Limit(limit).Offset(offset).Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"logs":    logs,
-		"total":   total,
-	})
+	common.SuccessResp(c, gin.H{"logs": logs, "total": total})
 }
 
 // StreamDeployTaskLogs 实时推送部署任务日志 (SSE)
@@ -2369,7 +2342,7 @@ func (api *ReleaseAPI) StreamDeployTaskLogs(c *gin.Context) {
 	// 验证任务存在
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", taskID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
@@ -2480,7 +2453,7 @@ func (api *ReleaseAPI) GetClientContainerLogs(c *gin.Context) {
 	// 获取任务信息
 	var task models.DeployTask
 	if err := api.db.First(&task, "id = ?", taskID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "task not found")
 		return
 	}
 
@@ -2502,10 +2475,7 @@ func (api *ReleaseAPI) GetClientContainerLogs(c *gin.Context) {
 	}
 
 	if containerID == "" {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "container ID not found for this client",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "container ID not found for this client")
 		return
 	}
 
@@ -2521,28 +2491,18 @@ func (api *ReleaseAPI) GetClientContainerLogs(c *gin.Context) {
 
 	// 使用远程执行器获取日志
 	if api.engine == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "remote executor not available",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "remote executor not available")
 		return
 	}
 
 	output, err := api.engine.ExecuteRemote(clientID, logsCmd, "")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "failed to get container logs: " + err.Error(),
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "failed to get container logs: ")
 		return
 	}
+	_ = output // 日志输出暂不返回
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":      true,
-		"container_id": containerID,
-		"client_id":    clientID,
-		"logs":         output,
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "操作成功")
 }
 
 // ==================== 脚本验证 ====================
@@ -2562,15 +2522,12 @@ func (api *ReleaseAPI) ValidateScript(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	result := validateShellScript(req.Script, req.Name)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"result":  result,
-	})
+	common.SuccessResp(c, gin.H{"result": result})
 }
 
 // validateShellScript 验证 shell 脚本
@@ -2687,10 +2644,7 @@ func (api *ReleaseAPI) GetGitVersions(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -2734,10 +2688,7 @@ func (api *ReleaseAPI) GetGitVersions(c *gin.Context) {
 
 	// 验证必须有仓库地址
 	if repoURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "repo_url is required",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "repo_url is required")
 		return
 	}
 
@@ -2762,22 +2713,12 @@ func (api *ReleaseAPI) GetGitVersions(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
+	_ = result // 版本信息暂不返回
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":        result.Success,
-		"repo_url":       result.RepoURL,
-		"default_branch": result.DefaultBranch,
-		"tags":           result.Tags,
-		"branches":       result.Branches,
-		"recent_commits": result.RecentCommits,
-		"error":          result.Error,
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "操作成功")
 }
 
 // ==================== 版本升级增强 API ====================
@@ -2799,10 +2740,7 @@ func (api *ReleaseAPI) ListProjectInstallations(c *gin.Context) {
 	}
 
 	if err := query.Find(&installations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -2836,11 +2774,7 @@ func (api *ReleaseAPI) ListProjectInstallations(c *gin.Context) {
 		result = append(result, info)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"installations": result,
-		"total":         len(result),
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "操作成功")
 }
 
 // ==================== 进程上报 API ====================
@@ -2863,7 +2797,7 @@ func (api *ReleaseAPI) ReceiveProcessReport(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -2882,17 +2816,11 @@ func (api *ReleaseAPI) ReceiveProcessReport(c *gin.Context) {
 	}
 
 	if err := api.db.Create(report).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"id":      report.ID,
-	})
+	common.SuccessResp(c, gin.H{"id": report})
 }
 
 // ListProjectProcesses 查询项目下所有客户端的进程状态
@@ -2915,10 +2843,7 @@ func (api *ReleaseAPI) ListProjectProcesses(c *gin.Context) {
 		Joins("JOIN (?) AS latest ON process_reports.client_id = latest.client_id AND process_reports.reported_at = latest.max_time", subQuery).
 		Where("project_id = ?", projectID).
 		Find(&reports).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -2946,11 +2871,7 @@ func (api *ReleaseAPI) ListProjectProcesses(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"clients": result,
-		"total":   len(result),
-	})
+	common.SuccessResp(c, gin.H{"clients": result, "total": len(result)})
 }
 
 // ==================== 容器上报 API ====================
@@ -2973,7 +2894,7 @@ func (api *ReleaseAPI) ReceiveContainerReport(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -2992,17 +2913,11 @@ func (api *ReleaseAPI) ReceiveContainerReport(c *gin.Context) {
 	}
 
 	if err := api.db.Create(report).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"id":      report.ID,
-	})
+	common.SuccessResp(c, gin.H{"id": report})
 }
 
 // ListProjectContainers 查询项目下所有客户端的容器状态
@@ -3017,10 +2932,7 @@ func (api *ReleaseAPI) ListProjectContainers(c *gin.Context) {
 	// 获取项目的容器前缀
 	var project models.Project
 	if err := api.db.First(&project, "id = ?", projectID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Project not found",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Project not found")
 		return
 	}
 
@@ -3038,10 +2950,7 @@ func (api *ReleaseAPI) ListProjectContainers(c *gin.Context) {
 	if err := api.db.Model(&models.ContainerReport{}).
 		Joins("JOIN (?) AS latest ON container_reports.client_id = latest.client_id AND container_reports.reported_at = latest.max_time", subQuery).
 		Find(&reports).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -3077,18 +2986,7 @@ func (api *ReleaseAPI) ListProjectContainers(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"project_id": projectID,
-		"prefix":     prefix,
-		"summary": gin.H{
-			"total_clients":    len(result),
-			"total_containers": totalContainers,
-			"running_count":    runningCount,
-			"stopped_count":    totalContainers - runningCount,
-		},
-		"clients": result,
-	})
+	common.SuccessResp(c, gin.H{"project_id": projectID, "prefix": prefix, "summary": gin.H{"total_clients": len(result), "total_containers": totalContainers, "running_count": runningCount, "stopped_count": totalContainers - runningCount}, "clients": result})
 }
 
 // GetContainersOverview 全局容器概览
@@ -3101,10 +2999,7 @@ func (api *ReleaseAPI) GetContainersOverview(c *gin.Context) {
 	// 获取所有项目及其容器前缀
 	var projects []models.Project
 	if err := api.db.Find(&projects).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
@@ -3166,11 +3061,7 @@ func (api *ReleaseAPI) GetContainersOverview(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":          true,
-		"total_containers": totalContainers,
-		"by_project":       byProject,
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "操作成功")
 }
 
 // ==================== 配置预览 API ====================
@@ -3189,14 +3080,14 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 获取项目
 	var project models.Project
 	if err := api.db.First(&project, "id = ?", req.ProjectID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "project not found"})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "project not found")
 		return
 	}
 
@@ -3205,7 +3096,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 	if req.VersionID != "" {
 		var version models.Version
 		if err := api.db.First(&version, "id = ?", req.VersionID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "version not found"})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "version not found")
 			return
 		}
 		versionConfig = version.DeployConfig
@@ -3215,10 +3106,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 	switch project.Type {
 	case models.DeployTypeContainer:
 		if project.ContainerConfig == nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "project container config not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "project container config not found")
 			return
 		}
 		finalConfig := models.MergeContainerConfig(
@@ -3226,7 +3114,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 			versionConfig,
 			req.OverrideConfig,
 		)
-		c.JSON(http.StatusOK, gin.H{
+		common.SuccessResp(c, gin.H{
 			"success":      true,
 			"deploy_type":  "container",
 			"final_config": finalConfig,
@@ -3239,10 +3127,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 
 	case models.DeployTypeKubernetes:
 		if project.KubernetesConfig == nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "project kubernetes config not found",
-			})
+			common.ErrorResp(c, common.CodeServiceUnavailable, "project kubernetes config not found")
 			return
 		}
 		finalConfig := models.MergeK8sConfig(
@@ -3250,7 +3135,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 			versionConfig,
 			req.OverrideConfig,
 		)
-		c.JSON(http.StatusOK, gin.H{
+		common.SuccessResp(c, gin.H{
 			"success":      true,
 			"deploy_type":  "kubernetes",
 			"final_config": finalConfig,
@@ -3263,7 +3148,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 
 	case models.DeployTypeScript:
 		// 脚本部署暂不支持配置合并
-		c.JSON(http.StatusOK, gin.H{
+		common.SuccessResp(c, gin.H{
 			"success":     true,
 			"deploy_type": "script",
 			"message":     "script deployment does not support config merge preview",
@@ -3274,7 +3159,7 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 
 	case models.DeployTypeGitPull:
 		// Git 拉取部署暂不支持配置合并
-		c.JSON(http.StatusOK, gin.H{
+		common.SuccessResp(c, gin.H{
 			"success":     true,
 			"deploy_type": "gitpull",
 			"message":     "gitpull deployment does not support config merge preview",
@@ -3284,9 +3169,6 @@ func (api *ReleaseAPI) PreviewDeployConfig(c *gin.Context) {
 		})
 
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "unsupported deploy type: " + string(project.Type),
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "unsupported deploy type: ")
 	}
 }

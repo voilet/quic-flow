@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/voilet/quic-flow/pkg/batch"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // BatchAPI 批量执行 API 扩展
@@ -35,34 +35,31 @@ func (b *BatchAPI) RegisterRoutes(api *gin.RouterGroup) {
 
 // BatchExecuteRequest 批量执行请求
 type BatchExecuteRequest struct {
-	Command       string          `json:"command" binding:"required"`       // 命令类型
-	Payload       json.RawMessage `json:"payload"`                          // 命令参数
-	TargetClients []string        `json:"target_clients"`                   // 目标客户端（空表示全部）
-	WaitForResult bool            `json:"wait_for_result"`                  // 是否等待执行结果
-	Timeout       int             `json:"timeout"`                          // 超时时间（秒）
+	Command       string          `json:"command" binding:"required"` // 命令类型
+	Payload       json.RawMessage `json:"payload"`                    // 命令参数
+	TargetClients []string        `json:"target_clients"`             // 目标客户端（空表示全部）
+	WaitForResult bool            `json:"wait_for_result"`            // 是否等待执行结果
+	Timeout       int             `json:"timeout"`                    // 超时时间（秒）
 }
 
 // BatchExecuteResponse 批量执行响应
 type BatchExecuteResponse struct {
-	Success bool            `json:"success"`
-	JobID   string          `json:"job_id,omitempty"`
-	Message string          `json:"message,omitempty"`
-	Error   string          `json:"error,omitempty"`
-	Job     *BatchJobInfo   `json:"job,omitempty"`
+	JobID string        `json:"job_id,omitempty"`
+	Job   *BatchJobInfo `json:"job,omitempty"`
 }
 
 // BatchJobInfo 任务信息（用于 API 响应）
 type BatchJobInfo struct {
-	ID           string                 `json:"id"`
-	Status       batch.BatchJobStatus   `json:"status"`
-	Command      string                 `json:"command"`
-	CreatedAt    time.Time              `json:"created_at"`
-	TotalCount   int64                  `json:"total_count"`
-	SuccessCount int64                  `json:"success_count"`
-	FailedCount  int64                  `json:"failed_count"`
-	PendingCount int64                  `json:"pending_count"`
-	Progress     float64                `json:"progress"`
-	Duration     string                 `json:"duration,omitempty"`
+	ID           string               `json:"id"`
+	Status       batch.BatchJobStatus `json:"status"`
+	Command      string               `json:"command"`
+	CreatedAt    time.Time            `json:"created_at"`
+	TotalCount   int64                `json:"total_count"`
+	SuccessCount int64                `json:"success_count"`
+	FailedCount  int64                `json:"failed_count"`
+	PendingCount int64                `json:"pending_count"`
+	Progress     float64              `json:"progress"`
+	Duration     string               `json:"duration,omitempty"`
 }
 
 // toJobInfo 转换为 API 响应格式
@@ -92,46 +89,33 @@ func toJobInfo(job *batch.BatchJob) *BatchJobInfo {
 // handleExecute 处理批量执行请求
 func (b *BatchAPI) handleExecute(c *gin.Context) {
 	if b.executor == nil {
-		c.JSON(http.StatusServiceUnavailable, BatchExecuteResponse{
-			Success: false,
-			Error:   "Batch executor not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Batch executor not initialized")
 		return
 	}
 
 	var req BatchExecuteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, BatchExecuteResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
 		return
 	}
 
 	// 创建任务
 	job, err := b.executor.Execute(req.Command, req.Payload, req.TargetClients, req.WaitForResult)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, BatchExecuteResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, BatchExecuteResponse{
-		Success: true,
-		JobID:   job.ID,
-		Message: "Batch job created successfully",
-		Job:     toJobInfo(job),
+	common.SuccessResp(c, BatchExecuteResponse{
+		JobID: job.ID,
+		Job:   toJobInfo(job),
 	})
 }
 
 // handleListJobs 处理获取任务列表请求
 func (b *BatchAPI) handleListJobs(c *gin.Context) {
 	if b.executor == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Batch executor not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Batch executor not initialized")
 		return
 	}
 
@@ -141,28 +125,23 @@ func (b *BatchAPI) handleListJobs(c *gin.Context) {
 		jobInfos[i] = toJobInfo(job)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"total":   len(jobs),
-		"jobs":    jobInfos,
+	common.SuccessResp(c, gin.H{
+		"total": len(jobs),
+		"jobs":  jobInfos,
 	})
 }
 
 // handleGetJob 处理获取单个任务请求
 func (b *BatchAPI) handleGetJob(c *gin.Context) {
 	if b.executor == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Batch executor not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Batch executor not initialized")
 		return
 	}
 
 	jobID := c.Param("id")
 	job, found := b.executor.GetJob(jobID)
 	if !found {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Job not found",
-		})
+		common.ErrorResp(c, common.CodeTaskNotFound, "任务不存在")
 		return
 	}
 
@@ -179,8 +158,7 @@ func (b *BatchAPI) handleGetJob(c *gin.Context) {
 		return true
 	})
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
+	common.SuccessResp(c, gin.H{
 		"job":     toJobInfo(job),
 		"results": results,
 		"errors":  errors,
@@ -190,40 +168,27 @@ func (b *BatchAPI) handleGetJob(c *gin.Context) {
 // handleCancelJob 处理取消任务请求
 func (b *BatchAPI) handleCancelJob(c *gin.Context) {
 	if b.executor == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Batch executor not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Batch executor not initialized")
 		return
 	}
 
 	jobID := c.Param("id")
 	if b.executor.CancelJob(jobID) {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Job cancelled",
-		})
+		common.SuccessResp(c, struct{}{})
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Failed to cancel job (not found or already completed)",
-		})
+		common.ErrorResp(c, common.CodeTaskNotFound, "Failed to cancel job (not found or already completed)")
 	}
 }
 
 // handleStats 处理获取统计信息请求
 func (b *BatchAPI) handleStats(c *gin.Context) {
 	if b.executor == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Batch executor not initialized",
-		})
+		common.ErrorResp(c, common.CodeServiceUnavailable, "Batch executor not initialized")
 		return
 	}
 
 	stats := b.executor.GetStats()
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"stats":   stats,
-	})
+	common.SuccessResp(c, stats)
 }
 
 // AddBatchRoutes 向 HTTPServer 添加批量执行路由

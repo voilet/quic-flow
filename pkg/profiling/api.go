@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/voilet/quic-flow/pkg/common"
 )
 
 // Handler 性能分析 API 处理器
@@ -58,10 +59,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 func (h *Handler) StartCPUProfile(c *gin.Context) {
 	var req StartCPUProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, StartCPUProfileResponse{
-			Success: false,
-			Message: "Invalid request parameters",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid request parameters")
 		return
 	}
 
@@ -75,18 +73,11 @@ func (h *Handler) StartCPUProfile(c *gin.Context) {
 
 	profile, err := h.profiler.StartCPUProfile(req.Name, req.Duration, username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, StartCPUProfileResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, StartCPUProfileResponse{
-		Success:  true,
-		ProfileID: profile.ID,
-		Message:  "CPU profiling started",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"profile_id": profile.ID}, "CPU profiling started")
 }
 
 // UploadCPUProfile 上传已采集的 CPU profile
@@ -96,10 +87,7 @@ func (h *Handler) UploadCPUProfile(c *gin.Context) {
 	// 获取上传的文件
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "No file uploaded",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "No file uploaded")
 		return
 	}
 
@@ -120,18 +108,11 @@ func (h *Handler) UploadCPUProfile(c *gin.Context) {
 	// 使用 profiler 的方法保存上传的 profile
 	profile, err := h.profiler.SaveUploadedCPUProfile(fileHeader, name, username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"profile":   profile,
-		"message":   "CPU profile uploaded successfully",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"profile": profile}, "CPU profile uploaded successfully")
 }
 
 // CaptureMemoryProfile 采集内存快照
@@ -140,10 +121,7 @@ func (h *Handler) UploadCPUProfile(c *gin.Context) {
 func (h *Handler) CaptureMemoryProfile(c *gin.Context) {
 	var req CaptureProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, CaptureProfileResponse{
-			Success: false,
-			Message: "Invalid request parameters",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid request parameters")
 		return
 	}
 
@@ -156,18 +134,11 @@ func (h *Handler) CaptureMemoryProfile(c *gin.Context) {
 
 	profile, err := h.profiler.CaptureMemoryProfile(req.Name, username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, CaptureProfileResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, CaptureProfileResponse{
-		Success:  true,
-		ProfileID: profile.ID,
-		Message:  "Memory profile captured",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"profile_id": profile.ID}, "Memory profile captured")
 }
 
 // CaptureGoroutineProfile 采集 Goroutine 快照
@@ -176,10 +147,7 @@ func (h *Handler) CaptureMemoryProfile(c *gin.Context) {
 func (h *Handler) CaptureGoroutineProfile(c *gin.Context) {
 	var req CaptureProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, CaptureProfileResponse{
-			Success: false,
-			Message: "Invalid request parameters",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "Invalid request parameters")
 		return
 	}
 
@@ -192,18 +160,11 @@ func (h *Handler) CaptureGoroutineProfile(c *gin.Context) {
 
 	profile, err := h.profiler.CaptureGoroutineProfile(req.Name, username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, CaptureProfileResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, CaptureProfileResponse{
-		Success:  true,
-		ProfileID: profile.ID,
-		Message:  "Goroutine profile captured",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"profile_id": profile.ID}, "Goroutine profile captured")
 }
 
 // ListProfiles 获取采集列表
@@ -226,18 +187,15 @@ func (h *Handler) ListProfiles(c *gin.Context) {
 
 	profiles, total, err := h.profiler.ListProfiles(req.Type, req.Status, req.Page, req.PageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ProfileListResponse{
-			Success: false,
-			Message: "Failed to list profiles",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to list profiles")
 		return
 	}
 
-	c.JSON(http.StatusOK, ProfileListResponse{
-		Success:  true,
-		Total:    total,
-		Page:     req.Page,
-		Profiles: profiles,
+	common.SuccessResp(c, gin.H{
+		"total":     total,
+		"page":      req.Page,
+		"page_size": req.PageSize,
+		"items":     profiles,
 	})
 }
 
@@ -246,26 +204,17 @@ func (h *Handler) ListProfiles(c *gin.Context) {
 func (h *Handler) GetProfile(c *gin.Context) {
 	profileID := c.Param("id")
 	if _, err := uuid.Parse(profileID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid profile ID",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Invalid profile ID")
 		return
 	}
 
 	profile, err := h.profiler.GetProfile(profileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Profile not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"profile": profile,
-	})
+	common.SuccessResp(c, profile)
 }
 
 // GetFlameGraph 获取火焰图 SVG
@@ -278,10 +227,7 @@ func (h *Handler) GetFlameGraph(c *gin.Context) {
 		// 尝试自动生成
 		flamePath, err = h.profiler.GenerateFlameGraph(profileID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Flame graph not available",
-			})
+			common.ErrorResp(c, common.CodeInternalError, "Flame graph not available")
 			return
 		}
 	}
@@ -297,18 +243,11 @@ func (h *Handler) GenerateFlameGraph(c *gin.Context) {
 
 	flamePath, err := h.profiler.GenerateFlameGraph(profileID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"flame_path": flamePath,
-		"message":    "Flame graph generated",
-	})
+	common.SuccessRespWithMsg(c, gin.H{"flame_path": flamePath}, "Flame graph generated")
 }
 
 // AnalyzeProfile 分析 profile
@@ -318,17 +257,11 @@ func (h *Handler) AnalyzeProfile(c *gin.Context) {
 
 	report, err := h.analyzer.Analyze(profileID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, AnalysisResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, AnalysisResponse{
-		Success: true,
-		Report:  report,
-	})
+	common.SuccessResp(c, report)
 }
 
 // DeleteProfile 删除采集
@@ -337,17 +270,11 @@ func (h *Handler) DeleteProfile(c *gin.Context) {
 	profileID := c.Param("id")
 
 	if err := h.profiler.DeleteProfile(profileID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete profile",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to delete profile")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Profile deleted",
-	})
+	common.SuccessRespWithMsg(c, gin.H{}, "Profile deleted")
 }
 
 // CleanupOldProfiles 清理旧采集
@@ -361,18 +288,11 @@ func (h *Handler) CleanupOldProfiles(c *gin.Context) {
 
 	count, err := h.profiler.CleanupOldProfiles(days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to cleanup profiles",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to cleanup profiles")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":     true,
-		"deleted_count": count,
-		"message":     fmt.Sprintf("Deleted %d old profiles", count),
-	})
+	common.SuccessRespWithMsg(c, gin.H{"deleted_count": count}, fmt.Sprintf("Deleted %d old profiles", count))
 }
 
 // DownloadProfile 下载原始 profile 文件
@@ -382,18 +302,12 @@ func (h *Handler) DownloadProfile(c *gin.Context) {
 
 	profile, err := h.profiler.GetProfile(profileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Profile not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile not found")
 		return
 	}
 
 	if profile.Status != StatusCompleted {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Profile is not completed",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile is not completed")
 		return
 	}
 
@@ -410,34 +324,25 @@ func (h *Handler) GetProfileText(c *gin.Context) {
 
 	profile, err := h.profiler.GetProfile(profileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Profile not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile not found")
 		return
 	}
 
 	if profile.Status != StatusCompleted {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Profile is not completed",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile is not completed")
 		return
 	}
 
 	// 使用 pprof 工具生成文本报告
 	// 这里简化处理，直接返回文件信息
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"profile": gin.H{
+	common.SuccessResp(c, gin.H{
 			"id":         profile.ID,
 			"type":       profile.Type,
 			"name":       profile.Name,
 			"file_path":  profile.FilePath,
 			"file_size":  profile.FileSize,
 			"created_at": profile.CreatedAt,
-		},
-	})
+		})
 }
 
 // StreamProfile 流式传输 profile 文件
@@ -447,28 +352,19 @@ func (h *Handler) StreamProfile(c *gin.Context) {
 
 	profile, err := h.profiler.GetProfile(profileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Profile not found",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile not found")
 		return
 	}
 
 	if profile.Status != StatusCompleted {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Profile is not completed",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Profile is not completed")
 		return
 	}
 
 	// 打开文件
 	f, err := os.Open(profile.FilePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to open profile file",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to open profile file")
 		return
 	}
 	defer f.Close()
@@ -476,10 +372,7 @@ func (h *Handler) StreamProfile(c *gin.Context) {
 	// 获取文件信息
 	info, err := f.Stat()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to read file info",
-		})
+		common.ErrorResp(c, common.CodeInternalError, "Failed to read file info")
 		return
 	}
 

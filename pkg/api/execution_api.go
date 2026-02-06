@@ -1,12 +1,12 @@
 package api
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/voilet/quic-flow/pkg/task/store"
+	"github.com/voilet/quic-flow/pkg/common"
 	"github.com/voilet/quic-flow/pkg/monitoring"
+	"github.com/voilet/quic-flow/pkg/task/store"
 )
 
 // ExecutionAPI 执行监控 API
@@ -67,21 +67,15 @@ func (api *ExecutionAPI) GetExecutionList(c *gin.Context) {
 	executions, total, err := api.executionStore.List(c.Request.Context(), params)
 	if err != nil {
 		api.logger.Error("Failed to list executions", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"executions": executions,
-			"total":      total,
-			"page":       page,
-			"page_size":  pageSize,
-		},
+	common.SuccessResp(c, gin.H{
+		"executions": executions,
+		"total":      total,
+		"page":       page,
+		"page_size":  pageSize,
 	})
 }
 
@@ -89,56 +83,38 @@ func (api *ExecutionAPI) GetExecutionList(c *gin.Context) {
 func (api *ExecutionAPI) GetExecutionDetail(c *gin.Context) {
 	executionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid execution id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid execution id")
 		return
 	}
 
 	execution, err := api.executionStore.GetByID(c.Request.Context(), executionID)
 	if err != nil {
 		api.logger.Error("Failed to get execution", "execution_id", executionID, "error", err)
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "execution not found",
-		})
+		common.ErrorResp(c, common.CodeNotFound, "execution not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    execution,
-	})
+	common.SuccessResp(c, execution)
 }
 
 // GetExecutionLogs 获取执行日志
 func (api *ExecutionAPI) GetExecutionLogs(c *gin.Context) {
 	executionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "invalid execution id",
-		})
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid execution id")
 		return
 	}
 
 	execution, err := api.executionStore.GetByID(c.Request.Context(), executionID)
 	if err != nil {
 		api.logger.Error("Failed to get execution", "execution_id", executionID, "error", err)
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "execution not found",
-		})
+		common.ErrorResp(c, common.CodeNotFound, "execution not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"output":   execution.Output,
-			"error_msg": execution.ErrorMsg,
-		},
+	common.SuccessResp(c, gin.H{
+		"output":    execution.Output,
+		"error_msg": execution.ErrorMsg,
 	})
 }
 
@@ -165,22 +141,19 @@ func (api *ExecutionAPI) GetExecutionStats(c *gin.Context) {
 	executions, _, err := api.executionStore.List(c.Request.Context(), params)
 	if err != nil {
 		api.logger.Error("Failed to get executions for stats", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
 
 	// 计算统计信息
 	stats := gin.H{
 		"total":        len(executions),
-		"success":     0,
-		"failed":      0,
-		"timeout":     0,
-		"cancelled":   0,
-		"running":     0,
-		"pending":     0,
+		"success":      0,
+		"failed":       0,
+		"timeout":      0,
+		"cancelled":    0,
+		"running":      0,
+		"pending":      0,
 		"avg_duration": int64(0),
 		"max_duration": int64(0),
 		"min_duration": int64(0),
@@ -220,8 +193,5 @@ func (api *ExecutionAPI) GetExecutionStats(c *gin.Context) {
 		stats["avg_duration"] = totalDuration / int64(count)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    stats,
-	})
+	common.SuccessResp(c, stats)
 }
