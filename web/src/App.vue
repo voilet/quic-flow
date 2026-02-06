@@ -10,35 +10,41 @@
         <h2>QUIC Flow</h2>
       </div>
 
-      <!-- 项目选择器 -->
-      <div class="project-selector" v-if="!isProjectRoute">
-        <el-select
-          v-model="selectedProjectId"
-          placeholder="选择项目进入工作台"
-          @change="goToProject"
-          style="width: 100%"
-          size="large"
-        >
-          <el-option
-            v-for="project in projects"
-            :key="project.id"
-            :label="project.name"
-            :value="project.id"
+      <!-- 项目管理 - 独立且明显的区域 -->
+      <div class="project-management-section" v-if="!isProjectRoute">
+        <div class="section-header">
+          <el-icon class="section-icon"><FolderOpened /></el-icon>
+          <span class="section-title">项目管理</span>
+        </div>
+        <div class="project-selector">
+          <el-select
+            v-model="selectedProjectId"
+            placeholder="选择项目进入工作台"
+            @change="goToProject"
+            style="width: 100%"
+            size="large"
           >
-            <div class="project-option">
-              <span class="project-name">{{ project.name }}</span>
-              <el-tag size="small" :type="getProjectTypeTag(project.type)">
-                {{ getProjectTypeLabel(project.type) }}
-              </el-tag>
-            </div>
-          </el-option>
-          <template #footer>
-            <el-button text @click="showCreateProject" style="width: 100%">
-              <el-icon><Plus /></el-icon>
-              创建新项目
-            </el-button>
-          </template>
-        </el-select>
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            >
+              <div class="project-option">
+                <span class="project-name">{{ project.name }}</span>
+                <el-tag size="small" :type="getProjectTypeTag(project.type)">
+                  {{ getProjectTypeLabel(project.type) }}
+                </el-tag>
+              </div>
+            </el-option>
+            <template #footer>
+              <el-button text @click="showCreateProject" style="width: 100%">
+                <el-icon><Plus /></el-icon>
+                创建新项目
+              </el-button>
+            </template>
+          </el-select>
+        </div>
       </div>
 
       <!-- 项目内导航 -->
@@ -68,7 +74,7 @@
       >
         <!-- 项目路由：显示项目内功能 -->
         <template v-if="isProjectRoute">
-          <el-menu-item index="/project/overview">
+          <el-menu-item :index="menuPaths.overview">
             <el-icon><DataBoard /></el-icon>
             <span>项目概览</span>
           </el-menu-item>
@@ -78,13 +84,25 @@
               <el-icon><Setting /></el-icon>
               <span>配置中心</span>
             </template>
-            <el-menu-item index="/project/config">
+            <el-menu-item :index="menuPaths.config">
               <el-icon><Files /></el-icon>
               <span>配置管理</span>
             </el-menu-item>
-            <el-menu-item index="/project/config/history">
+            <el-menu-item :index="menuPaths.configHistory">
               <el-icon><Clock /></el-icon>
               <span>变更历史</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.configReleases">
+              <el-icon><Upload /></el-icon>
+              <span>发布管理</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.configGrayRules">
+              <el-icon><Operation /></el-icon>
+              <span>灰度规则</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.configSubscribers">
+              <el-icon><User /></el-icon>
+              <span>订阅者</span>
             </el-menu-item>
           </el-sub-menu>
 
@@ -93,11 +111,19 @@
               <el-icon><Operation /></el-icon>
               <span>流水线</span>
             </template>
-            <el-menu-item index="/project/pipeline">
+            <el-menu-item :index="menuPaths.pipeline">
               <el-icon><List /></el-icon>
               <span>流水线列表</span>
             </el-menu-item>
-            <el-menu-item index="/project/executions">
+            <el-menu-item :index="menuPaths.pipelineEditor">
+              <el-icon><Edit /></el-icon>
+              <span>流水线编辑器</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.pipelineTemplates">
+              <el-icon><DocumentCopy /></el-icon>
+              <span>模板管理</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.executions">
               <el-icon><VideoPlay /></el-icon>
               <span>执行历史</span>
             </el-menu-item>
@@ -106,15 +132,27 @@
           <el-sub-menu index="alert">
             <template #title>
               <el-icon><Warning /></el-icon>
-              <span>告警规则</span>
+              <span>告警管理</span>
             </template>
-            <el-menu-item index="/project/alerts">
+            <el-menu-item :index="menuPaths.alerts">
               <el-icon><Bell /></el-icon>
               <span>告警列表</span>
             </el-menu-item>
-            <el-menu-item index="/project/alert-rules">
+            <el-menu-item :index="menuPaths.alertRules">
               <el-icon><Document /></el-icon>
               <span>规则管理</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.alertChannels">
+              <el-icon><Connection /></el-icon>
+              <span>通知渠道</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.silenceRules">
+              <el-icon><MuteNotification /></el-icon>
+              <span>抑制规则</span>
+            </el-menu-item>
+            <el-menu-item :index="menuPaths.oncall">
+              <el-icon><Calendar /></el-icon>
+              <span>值班管理</span>
             </el-menu-item>
           </el-sub-menu>
 
@@ -123,11 +161,11 @@
               <el-icon><Upload /></el-icon>
               <span>发布管理</span>
             </template>
-            <el-menu-item index="/project/versions">
+            <el-menu-item :index="menuPaths.versions">
               <el-icon><PriceTag /></el-icon>
               <span>版本管理</span>
             </el-menu-item>
-            <el-menu-item index="/project/deployments">
+            <el-menu-item :index="menuPaths.deployments">
               <el-icon><Document /></el-icon>
               <span>部署记录</span>
             </el-menu-item>
@@ -193,6 +231,34 @@
             <el-menu-item index="/silence-rules">
               <el-icon><MuteNotification /></el-icon>
               <span>抑制规则</span>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <!-- 配置中心 -->
+          <el-sub-menu index="global-config">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span>配置中心</span>
+            </template>
+            <el-menu-item index="/config">
+              <el-icon><Files /></el-icon>
+              <span>配置管理</span>
+            </el-menu-item>
+            <el-menu-item index="/config/history">
+              <el-icon><Clock /></el-icon>
+              <span>变更历史</span>
+            </el-menu-item>
+            <el-menu-item index="/config/releases">
+              <el-icon><Upload /></el-icon>
+              <span>发布管理</span>
+            </el-menu-item>
+            <el-menu-item index="/config/gray-rules">
+              <el-icon><Operation /></el-icon>
+              <span>灰度规则</span>
+            </el-menu-item>
+            <el-menu-item index="/config/subscribers">
+              <el-icon><User /></el-icon>
+              <span>订阅者</span>
             </el-menu-item>
           </el-sub-menu>
 
@@ -323,7 +389,7 @@ import {
   User, ArrowDown, ArrowLeft, Plus, MoreFilled, Tools, Folder, PriceTag, Promotion, ChatDotRound,
   DataBoard, Warning, Bell, Clock, Connection, MuteNotification, Operation, Document, VideoPlay,
   Monitor, Platform, List, VideoCamera, Timer, Setting, Lock, Key, TrendCharts, Files, Upload,
-  Message, SwitchButton
+  Message, SwitchButton, FolderOpened, Calendar, Edit, DocumentCopy
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
@@ -432,6 +498,31 @@ const handleProjectAction = (command) => {
   }
 }
 
+// 菜单路径计算属性（携带项目ID）
+const menuPaths = computed(() => {
+  const pid = currentProjectId.value
+  const query = pid ? `?projectId=${pid}` : ''
+  return {
+    overview: `/project/overview${query}`,
+    config: `/project/config${query}`,
+    configHistory: `/project/config/history${query}`,
+    configReleases: `/project/config/releases${query}`,
+    configGrayRules: `/project/config/gray-rules${query}`,
+    configSubscribers: `/project/config/subscribers${query}`,
+    pipeline: `/project/pipeline${query}`,
+    pipelineEditor: `/project/pipeline/editor${query}`,
+    pipelineTemplates: `/project/pipeline/templates${query}`,
+    executions: `/project/executions${query}`,
+    alerts: `/project/alerts${query}`,
+    alertRules: `/project/alert-rules${query}`,
+    alertChannels: `/project/alert-channels${query}`,
+    silenceRules: `/project/silence-rules${query}`,
+    oncall: `/project/oncall${query}`,
+    versions: `/project/versions${query}`,
+    deployments: `/project/deployments${query}`
+  }
+})
+
 // 获取项目类型标签
 const getProjectTypeTag = (type) => {
   const map = {
@@ -461,9 +552,17 @@ const pageTitle = computed(() => {
       '/project/config': '配置中心',
       '/project/config/history': '配置历史',
       '/project/pipeline': '流水线列表',
+      '/project/pipeline/editor': '流水线编辑器',
+      '/project/pipeline/templates': '模板管理',
       '/project/executions': '执行历史',
       '/project/alerts': '告警列表',
       '/project/alert-rules': '告警规则',
+      '/project/alert-channels': '通知渠道',
+      '/project/silence-rules': '抑制规则',
+      '/project/oncall': '值班管理',
+      '/project/config/releases': '发布管理',
+      '/project/config/gray-rules': '灰度规则',
+      '/project/config/subscribers': '订阅者',
       '/project/versions': '版本管理',
       '/project/deployments': '部署记录'
     }
@@ -481,6 +580,11 @@ const pageTitle = computed(() => {
     '/alerts': '全部告警',
     '/alert-channels': '通知渠道',
     '/silence-rules': '抑制规则',
+    '/config': '配置中心',
+    '/config/history': '配置历史',
+    '/config/releases': '发布管理',
+    '/config/gray-rules': '灰度规则',
+    '/config/subscribers': '订阅者',
     '/filetransfer': '文件传输',
     '/task': '定时任务',
     '/task/execution': '执行记录',
@@ -539,13 +643,6 @@ watch(() => currentProjectId.value, async (newId) => {
   }
 }, { immediate: true })
 
-onMounted(() => {
-  updateTheme()
-  checkDatabaseStatus()
-  loadProjects()
-})
-</script>
-
 const dbStatus = computed(() => {
   if (dbInitialized.value === null) {
     return { type: 'info', text: '检查中...', icon: 'Loading' }
@@ -554,46 +651,6 @@ const dbStatus = computed(() => {
   } else {
     return { type: 'warning', text: '数据库未配置', icon: 'WarningFilled' }
   }
-})
-
-// 用户操作处理
-async function handleUserCommand(command) {
-  switch (command) {
-    case 'logout':
-      try {
-        await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        })
-        await userStore.logout()
-        ElMessage.success('已退出登录')
-        router.push('/login')
-      } catch (error) {
-        // 用户取消或登出失败
-        if (error !== 'cancel') {
-          console.error('Logout error:', error)
-        }
-      }
-      break
-  }
-}
-
-// 检查数据库状态
-async function checkDatabaseStatus() {
-  try {
-    const res = await request.get('/setup/status')
-    if (res.success) {
-      dbInitialized.value = res.status.initialized
-    }
-  } catch (e) {
-    dbInitialized.value = false
-  }
-}
-
-onMounted(() => {
-  updateTheme() // 初始化主题
-  checkDatabaseStatus()
 })
 </script>
 
@@ -695,9 +752,49 @@ onMounted(() => {
   transition: color 0.3s ease;
 }
 
+/* 项目管理区域 - 独立且明显 */
+.project-management-section {
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(64, 158, 255, 0.05) 100%);
+  border-bottom: 2px solid var(--tech-primary);
+  margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.project-management-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--tech-gradient-primary);
+  opacity: 0.6;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 8px;
+  color: var(--tech-primary);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.section-icon {
+  font-size: 18px;
+  color: var(--tech-primary);
+}
+
+.section-title {
+  flex: 1;
+}
+
 .project-selector {
-  padding: 16px;
-  border-bottom: 1px solid var(--tech-border);
+  padding: 8px 16px 16px;
 }
 
 .project-option {

@@ -1,0 +1,254 @@
+# 流水线用例示例：应用部署流程
+#
+# 这是一个完整的部署流水线示例，展示如何使用流水线系统进行应用部署
+# 包含三个阶段：预发布、发布、发布后
+# 每个阶段包含多个任务，支持并行执行、条件依赖、错误处理等
+
+name: "标准应用部署流水线"
+description: "包含健康检查、备份、部署、验证和通知的完整部署流程"
+
+# 流水线类型：deploy（部署）、operations（运维）、cicd（CI/CD）、custom（自定义）
+type: deploy
+
+# 全局配置
+global:
+  # 默认超时时间（秒）
+  timeout: 300
+  # 默认重试次数
+  retry: 2
+  # 默认重试延迟（秒）
+  retry_delay: 5
+
+# 阶段配置
+stages:
+  # ==================== 预发布阶段 ====================
+  - name: "预发布检查"
+    phase: pre_release
+    on_error: stop  # 错误时停止整个流水线
+    parallel: false # 串行执行
+
+    tasks:
+      # 任务 1：健康检查 - 验证目标环境状态
+      - id: "pre-health-check"
+        name: "目标环境健康检查"
+        type: health_check
+        timeout: 30
+        retry: 3
+        retry_delay: 5
+        config:
+          # 目标主机列表
+          hosts:
+            - "{{ .env.target_hosts }}"
+          # 检查端口
+          ports: [8080, 8443]
+          # 预期状态码
+          expected_status: 200
+          # 超时时间
+          request_timeout: 10
+
+      # 任务 2：备份 - 备份当前版本
+      - id: "backup-current"
+        name: "备份当前版本"
+        type: backup
+        depends_on: ["pre-health-check"] # 依赖健康检查成功
+        timeout: 120
+        config:
+          # 备份目标
+          targets:
+            - path: "/opt/app/{{ .app.name }}"
+              type: "application"
+            - path: "/etc/{{ .app.name }}/config"
+              type: "config"
+          # 备份存储位置
+          backup_path: "/backup/{{ .app.name }}/{{ .timestamp }}"
+          # 保留天数
+          retention_days: 7
+
+  # ==================== 发布阶段 ====================
+  - name: "应用部署"
+    phase: release
+    on_error: rollback # 错误时回滚
+    parallel: false
+
+    tasks:
+      # 任务 3：停止服务
+      - id: "stop-service"
+        name: "停止应用服务"
+        type: stop_service
+        depends_on: ["backup-current"]
+        timeout: 60
+        config:
+          service_name: "{{ .app.name }}"
+          # 优雅关闭时间（秒）
+          graceful_timeout: 30
+          # 等待进程完全退出
+          wait_timeout: 30
+
+      # 任务 4：部署新版本
+      - id: "deploy-new"
+        name: "部署新版本"
+        type: deploy
+        depends_on: ["stop-service"]
+        timeout: 180
+        config:
+          # 部署源
+          source:
+            type: "package"
+            url: "{{ .deployment.package_url }}"
+            checksum: "{{ .deployment.checksum }}"
+          # 部署目标
+          destination: "/opt/app/{{ .app.name }}"
+          # 部署前脚本
+          pre_script: |
+            #!/bin/bash
+            echo "开始部署前检查..."
+            df -h /opt/app
+          # 部署后脚本
+          post_script: |
+            #!/bin/bash
+            echo "部署完成，设置权限..."
+            chown -R appuser:appgroup /opt/app/{{ .app.name }}
+          # 环境变量注入
+          env_files:
+            - "/etc/{{ .app.name }}/env.production"
+
+      # 任务 5：启动服务
+      - id: "start-service"
+        name: "启动应用服务"
+        type: start_service
+        depends_on: ["deploy-new"]
+        timeout: 60
+        config:
+          service_name: "{{ .app.name }}"
+          # 启动命令
+          start_command: "systemctl start {{ .app.name }}"
+          # 等待服务就绪
+          wait_for_ready: true
+          ready_timeout: 45
+
+      # 任务 6：数据库迁移（并行执行）
+      - id: "db-migrate"
+        name: "数据库迁移"
+        type: db_migrate
+        depends_on: ["stop-service"] # 与 deploy-new 并行执行
+        timeout: 300
+        config:
+          # 数据库连接
+          database:
+            host: "{{ .db.host }}"
+            port: {{ .db.port }}
+            name: "{{ .db.name }}"
+            # 迁移脚本位置
+            migration_path: "/opt/app/{{ .app.name }}/migrations"
+          # 迁移策略
+          strategy: "auto" # auto、manual、rollback_on_failure
+
+  # ==================== 发布后阶段 ====================
+  - name: "发布后验证"
+    phase: post_release
+    on_error: continue # 继续执行（不中断）
+    parallel: true # 并行执行
+
+    tasks:
+      # 任务 7：健康检查
+      - id: "post-health-check"
+        name: "新版本健康检查"
+        type: health_check
+        timeout: 60
+        retry: 5
+        retry_delay: 10
+        config:
+          hosts:
+            - "{{ .env.target_hosts }}"
+          ports: [8080, 8443]
+          # 验证版本号
+          version_check:
+            endpoint: "/api/version"
+            expected_version: "{{ .deployment.version }}"
+
+      # 任务 8：集成测试
+      - id: "integration-test"
+        name: "集成测试"
+        type: script
+        timeout: 120
+        config:
+          # 测试脚本
+          script: |
+            #!/bin/bash
+            set -e
+            echo "运行集成测试..."
+
+            # API 测试
+            curl -f http://{{ .env.target_hosts }}/api/health || exit 1
+
+            # 业务逻辑测试
+            python3 /opt/tests/integration_test.py
+
+            echo "集成测试通过！"
+
+      # 任务 9：清理旧版本
+      - id: "cleanup"
+        name: "清理旧版本"
+        type: cleanup
+        timeout: 60
+        config:
+          # 清理策略
+          keep_versions: 3 # 保留最近3个版本
+          clean_path: "/opt/app/{{ .app.name }}/releases"
+
+      # 任务 10：发送通知
+      - id: "notify-success"
+        name: "部署成功通知"
+        type: notify
+        depends_on: ["post-health-check", "integration-test"]
+        timeout: 30
+        config:
+          # 通知渠道
+          channels:
+            - type: "webhook"
+              url: "{{ .notification.webhook_url }}"
+            - type: "email"
+              recipients: ["{{ .team.email }}"]
+          # 通知内容
+          subject: "✅ {{ .app.name }} v{{ .deployment.version }} 部署成功"
+          body: |
+            部署摘要：
+            - 应用：{{ .app.name }}
+            - 版本：{{ .deployment.version }}
+            - 环境：{{ .env.name }}
+            - 时间：{{ .timestamp }}
+            - 执行人：{{ .user.name }}
+
+            详情请查看：{{ .deployment.dashboard_url }}
+
+# ==================== 参数说明 ====================
+#
+# 以下变量需要在执行流水线时提供：
+#
+# 应用相关：
+#   app.name: 应用名称
+#
+# 部署相关：
+#   deployment.package_url: 部署包下载地址
+#   deployment.checksum: 部署包校验和
+#   deployment.version: 新版本号
+#   deployment.dashboard_url: 部署详情页面URL
+#
+# 环境相关：
+#   env.name: 环境名称（dev/staging/prod）
+#   env.target_hosts: 目标主机列表
+#
+# 数据库相关：
+#   db.host: 数据库主机
+#   db.port: 数据库端口
+#   db.name: 数据库名称
+#
+# 通知相关：
+#   notification.webhook_url: Webhook URL
+#   team.email: 团队邮箱
+#
+# 用户相关：
+#   user.name: 执行用户名
+#
+# 时间戳：
+#   timestamp: 自动生成（ISO 8601 格式）
