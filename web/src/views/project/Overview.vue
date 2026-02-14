@@ -42,12 +42,12 @@
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover" class="quick-card" @click="goToPipeline">
+        <el-card shadow="hover" class="quick-card" @click="goToExecutions">
           <div class="quick-content">
-            <el-icon class="quick-icon" color="#67c23a" :size="32"><Operation /></el-icon>
+            <el-icon class="quick-icon" color="#67c23a" :size="32"><VideoPlay /></el-icon>
             <div class="quick-info">
-              <div class="quick-title">流水线</div>
-              <div class="quick-desc">{{ stats.pipelineCount || 0 }} 条流水线</div>
+              <div class="quick-title">执行历史</div>
+              <div class="quick-desc">{{ stats.executionCount || 0 }} 次执行</div>
             </div>
           </div>
         </el-card>
@@ -145,7 +145,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  Edit, Refresh, Setting, Operation, Warning, Upload, ArrowRight
+  Edit, Refresh, Setting, VideoPlay, Warning, Upload, ArrowRight
 } from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
@@ -200,13 +200,6 @@ const refresh = () => {
 const goToConfig = () => {
   router.push({
     path: '/project/config',
-    query: { projectId: projectId.value }
-  })
-}
-
-const goToPipeline = () => {
-  router.push({
-    path: '/project/pipeline',
     query: { projectId: projectId.value }
   })
 }

@@ -83,6 +83,15 @@ export function listAlerts(params) {
 }
 
 /**
+ * 获取活跃告警列表（未解决的告警）
+ * @param {Object} params - 查询参数
+ * @returns {Promise}
+ */
+export function getActiveAlerts(params = {}) {
+  return request.get('/alerts', { params: { ...params, status: 'firing' } })
+}
+
+/**
  * 获取告警详情
  * @param {string} id - 告警 ID
  * @returns {Promise}
@@ -397,6 +406,7 @@ export default {
 
   // 告警实例
   listAlerts,
+  getActiveAlerts,
   getAlert,
   resolveAlert,
   silenceAlert,

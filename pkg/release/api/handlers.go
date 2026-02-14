@@ -112,13 +112,6 @@ func (api *ReleaseAPI) RegisterRoutes(r *gin.RouterGroup) {
 		release.PUT("/targets/:id", api.UpdateTarget)
 		release.DELETE("/targets/:id", api.DeleteTarget)
 
-		// 流水线管理
-		release.POST("/projects/:id/pipelines", api.CreatePipeline)
-		release.GET("/projects/:id/pipelines", api.ListPipelines)
-		release.GET("/pipelines/:id", api.GetPipeline)
-		release.PUT("/pipelines/:id", api.UpdatePipeline)
-		release.DELETE("/pipelines/:id", api.DeletePipeline)
-
 		// 变量管理
 		release.POST("/variables", api.CreateVariable)
 		release.GET("/projects/:id/variables", api.ListProjectVariables)
@@ -341,7 +334,7 @@ func (api *ReleaseAPI) ListProjects(c *gin.Context) {
 func (api *ReleaseAPI) GetProject(c *gin.Context) {
 	id := c.Param("id")
 	var project models.Project
-	if err := api.db.Preload("Environments").Preload("Pipelines").First(&project, "id = ?", id).Error; err != nil {
+	if err := api.db.Preload("Environments").First(&project, "id = ?", id).Error; err != nil {
 		common.ErrorResp(c, common.CodeServiceUnavailable, "project not found")
 		return
 	}
@@ -599,97 +592,6 @@ func (api *ReleaseAPI) DeleteTarget(c *gin.Context) {
 	common.SuccessResp(c, gin.H{})
 }
 
-// ==================== 流水线管理 ====================
-
-// CreatePipeline 创建流水线
-func (api *ReleaseAPI) CreatePipeline(c *gin.Context) {
-	projectID := c.Param("id")
-
-	var req struct {
-		Name        string         `json:"name" binding:"required"`
-		Description string         `json:"description"`
-		IsDefault   bool           `json:"is_default"`
-		Stages      []models.Stage `json:"stages"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ErrorResp(c, common.CodeInternalError, err.Error())
-		return
-	}
-
-	pipeline := &models.Pipeline{
-		ProjectID:   projectID,
-		Name:        req.Name,
-		Description: req.Description,
-		IsDefault:   req.IsDefault,
-		Stages:      req.Stages,
-	}
-
-	if err := api.db.Create(pipeline).Error; err != nil {
-		common.ErrorResp(c, common.CodeInternalError, err.Error())
-		return
-	}
-
-	common.SuccessResp(c, pipeline)
-}
-
-// ListPipelines 列出流水线
-func (api *ReleaseAPI) ListPipelines(c *gin.Context) {
-	projectID := c.Param("id")
-	var pipelines []models.Pipeline
-	if err := api.db.Where("project_id = ?", projectID).Find(&pipelines).Error; err != nil {
-		common.ErrorResp(c, common.CodeInternalError, err.Error())
-		return
-	}
-
-	common.SuccessResp(c, pipelines)
-}
-
-// GetPipeline 获取流水线详情
-func (api *ReleaseAPI) GetPipeline(c *gin.Context) {
-	id := c.Param("id")
-	var pipeline models.Pipeline
-	if err := api.db.First(&pipeline, "id = ?", id).Error; err != nil {
-		common.ErrorResp(c, common.CodeServiceUnavailable, "pipeline not found")
-		return
-	}
-
-	common.SuccessResp(c, pipeline)
-}
-
-// UpdatePipeline 更新流水线
-func (api *ReleaseAPI) UpdatePipeline(c *gin.Context) {
-	id := c.Param("id")
-	var pipeline models.Pipeline
-	if err := api.db.First(&pipeline, "id = ?", id).Error; err != nil {
-		common.ErrorResp(c, common.CodeServiceUnavailable, "pipeline not found")
-		return
-	}
-
-	if err := c.ShouldBindJSON(&pipeline); err != nil {
-		common.ErrorResp(c, common.CodeInternalError, err.Error())
-		return
-	}
-
-	if err := api.db.Save(&pipeline).Error; err != nil {
-		common.ErrorResp(c, common.CodeInternalError, err.Error())
-		return
-	}
-
-	common.SuccessResp(c, pipeline)
-}
-
-// DeletePipeline 删除流水线
-func (api *ReleaseAPI) DeletePipeline(c *gin.Context) {
-	id := c.Param("id")
-	if err := api.db.Delete(&models.Pipeline{}, "id = ?", id).Error; err != nil {
-		common.ErrorResp(c, common.CodeInternalError, err.Error())
-		return
-	}
-
-	common.SuccessResp(c, gin.H{})
-}
-
 // ==================== 变量管理 ====================
 
 // CreateVariable 创建变量
@@ -859,7 +761,6 @@ func (api *ReleaseAPI) RollbackRelease(c *gin.Context) {
 	rollbackReq := &engine.CreateReleaseRequest{
 		ProjectID:     release.ProjectID,
 		EnvironmentID: release.EnvironmentID,
-		PipelineID:    release.PipelineID,
 		Version:       req.TargetVersion,
 		Operation:     models.OperationTypeRollback,
 		TargetIDs:     release.TargetIDs,

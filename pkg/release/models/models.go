@@ -236,7 +236,6 @@ type Project struct {
 	// 关联
 	Environments []Environment `gorm:"foreignKey:ProjectID" json:"environments,omitempty"`
 	Variables    []Variable    `gorm:"foreignKey:ProjectID" json:"variables,omitempty"`
-	Pipelines    []Pipeline    `gorm:"foreignKey:ProjectID" json:"pipelines,omitempty"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -361,72 +360,11 @@ type Variable struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Pipeline 流水线
-type Pipeline struct {
-	ID          string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	ProjectID   string `gorm:"type:uuid;index;not null" json:"project_id"`
-	Name        string `gorm:"size:100;not null" json:"name"`
-	Description string `gorm:"size:500" json:"description"`
-	IsDefault   bool   `gorm:"default:false" json:"is_default"`
-
-	// 阶段配置
-	Stages Stages `gorm:"type:jsonb" json:"stages"`
-
-	// 关联
-	Project Project `gorm:"foreignKey:ProjectID" json:"-"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-// Stages 阶段列表
-type Stages []Stage
-
-func (s Stages) Value() (driver.Value, error) {
-	return json.Marshal(s)
-}
-
-func (s *Stages) Scan(value interface{}) error {
-	if value == nil {
-		*s = nil
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return nil
-	}
-	return json.Unmarshal(bytes, s)
-}
-
-// Stage 阶段
-type Stage struct {
-	Name     string      `json:"name"`
-	Phase    StagePhase  `json:"phase"`
-	Tasks    []Task      `json:"tasks"`
-	OnError  ErrorAction `json:"on_error"`
-	Parallel bool        `json:"parallel"`
-}
-
-// Task 任务
-type Task struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Type       TaskType       `json:"type"`
-	Config     map[string]any `json:"config"`
-	Timeout    int            `json:"timeout"`
-	Retry      int            `json:"retry"`
-	RetryDelay int            `json:"retry_delay"`
-	Condition  string         `json:"condition"`
-	DependsOn  []string       `json:"depends_on"`
-}
-
 // Release 发布记录
 type Release struct {
 	ID            string        `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
 	ProjectID     string        `gorm:"type:uuid;index;not null" json:"project_id"`
 	EnvironmentID string        `gorm:"type:uuid;index;not null" json:"environment_id"`
-	PipelineID    string        `gorm:"type:uuid;index;not null" json:"pipeline_id"`
 	Version       string        `gorm:"size:50;not null" json:"version"`
 	Operation     OperationType `gorm:"size:20;not null;default:'deploy'" json:"operation"`
 	Status        ReleaseStatus `gorm:"size:20;not null;index" json:"status"`
@@ -1519,7 +1457,6 @@ var AllModels = []interface{}{
 	&Environment{},
 	&Target{},
 	&Variable{},
-	&Pipeline{},
 	&Version{},
 	&DeployTask{},
 	&DeployLog{},

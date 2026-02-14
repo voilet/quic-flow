@@ -122,8 +122,8 @@
 
             <div class="project-meta">
               <div class="meta-item">
-                <el-icon><Document /></el-icon>
-                <span>{{ project.pipeline_count || 0 }} 条流水线</span>
+                <el-icon><VideoPlay /></el-icon>
+                <span>{{ project.execution_count || 0 }} 次执行</span>
               </div>
               <div class="meta-item">
                 <el-icon><Files /></el-icon>
@@ -206,7 +206,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus, FolderOpened, SuccessFilled, WarningFilled, Timer, Search,
-  Document, Files, Bell, Warning, Edit, Delete
+  VideoPlay, Files, Bell, Warning, Edit, Delete
 } from '@element-plus/icons-vue'
 import api from '@/api'
 

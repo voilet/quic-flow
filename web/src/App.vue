@@ -106,29 +106,6 @@
             </el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="pipeline">
-            <template #title>
-              <el-icon><Operation /></el-icon>
-              <span>流水线</span>
-            </template>
-            <el-menu-item :index="menuPaths.pipeline">
-              <el-icon><List /></el-icon>
-              <span>流水线列表</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.pipelineEditor">
-              <el-icon><Edit /></el-icon>
-              <span>流水线编辑器</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.pipelineTemplates">
-              <el-icon><DocumentCopy /></el-icon>
-              <span>模板管理</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.executions">
-              <el-icon><VideoPlay /></el-icon>
-              <span>执行历史</span>
-            </el-menu-item>
-          </el-sub-menu>
-
           <el-sub-menu index="alert">
             <template #title>
               <el-icon><Warning /></el-icon>
@@ -389,7 +366,7 @@ import {
   User, ArrowDown, ArrowLeft, Plus, MoreFilled, Tools, Folder, PriceTag, Promotion, ChatDotRound,
   DataBoard, Warning, Bell, Clock, Connection, MuteNotification, Operation, Document, VideoPlay,
   Monitor, Platform, List, VideoCamera, Timer, Setting, Lock, Key, TrendCharts, Files, Upload,
-  Message, SwitchButton, FolderOpened, Calendar, Edit, DocumentCopy
+  Message, SwitchButton, FolderOpened, Calendar
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
@@ -509,9 +486,6 @@ const menuPaths = computed(() => {
     configReleases: `/project/config/releases${query}`,
     configGrayRules: `/project/config/gray-rules${query}`,
     configSubscribers: `/project/config/subscribers${query}`,
-    pipeline: `/project/pipeline${query}`,
-    pipelineEditor: `/project/pipeline/editor${query}`,
-    pipelineTemplates: `/project/pipeline/templates${query}`,
     executions: `/project/executions${query}`,
     alerts: `/project/alerts${query}`,
     alertRules: `/project/alert-rules${query}`,
@@ -551,9 +525,6 @@ const pageTitle = computed(() => {
       '/project/overview': '项目概览',
       '/project/config': '配置中心',
       '/project/config/history': '配置历史',
-      '/project/pipeline': '流水线列表',
-      '/project/pipeline/editor': '流水线编辑器',
-      '/project/pipeline/templates': '模板管理',
       '/project/executions': '执行历史',
       '/project/alerts': '告警列表',
       '/project/alert-rules': '告警规则',

@@ -182,13 +182,13 @@ const routes = [
     component: () => import('@/views/SilenceRules.vue'),
     meta: { title: '抑制规则' }
   },
+  // 项目工作台路由
   {
-    path: '/',
+    path: '/workspace',
     name: 'ProjectWorkspace',
     component: () => import('@/views/ProjectWorkspace.vue'),
     meta: { title: '项目工作台' }
   },
-  // 项目工作台路由
   {
     path: '/project/overview',
     name: 'ProjectOverview',
@@ -209,34 +209,22 @@ const routes = [
     meta: { title: '配置历史' }
   },
   {
-    path: '/project/pipeline',
-    name: 'ProjectPipeline',
-    component: () => import('@/views/pipeline/List.vue'),
-    meta: { title: '流水线列表' }
-  },
-  {
-    path: '/project/pipeline/editor',
-    name: 'ProjectPipelineEditor',
-    component: () => import('@/views/pipeline/Editor.vue'),
-    meta: { title: '流水线编辑器' }
-  },
-  {
-    path: '/project/pipeline/editor/:id',
-    name: 'ProjectPipelineEditorEdit',
-    component: () => import('@/views/pipeline/Editor.vue'),
-    meta: { title: '编辑流水线' }
-  },
-  {
-    path: '/project/pipeline/templates',
-    name: 'ProjectPipelineTemplates',
-    component: () => import('@/views/pipeline/Templates.vue'),
-    meta: { title: '模板管理' }
-  },
-  {
     path: '/project/executions',
     name: 'ProjectExecutions',
-    component: () => import('@/views/pipeline/Execute.vue'),
+    component: () => import('@/views/task/Execution.vue'),
     meta: { title: '执行历史' }
+  },
+  {
+    path: '/project/versions',
+    name: 'ProjectVersions',
+    component: () => import('@/views/Release.vue'),
+    meta: { title: '版本管理' }
+  },
+  {
+    path: '/project/deployments',
+    name: 'ProjectDeployments',
+    component: () => import('@/views/Release.vue'),
+    meta: { title: '部署记录' }
   },
   {
     path: '/project/alerts',
@@ -285,19 +273,6 @@ const routes = [
     name: 'ProjectConfigReleases',
     component: () => import('@/views/config/Releases.vue'),
     meta: { title: '发布管理' }
-  },
-  // 兼容旧路由
-  {
-    path: '/pipeline',
-    redirect: '/'
-  },
-  {
-    path: '/pipeline/editor',
-    redirect: '/'
-  },
-  {
-    path: '/pipeline/execute',
-    redirect: '/'
   }
 ]
 

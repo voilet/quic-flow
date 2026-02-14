@@ -325,7 +325,6 @@ func (s *SetupAPI) handleInitialize(c *gin.Context) {
 			"environments",
 			"targets",
 			"variables",
-			"pipelines",
 			"releases",
 			"target_installations",
 			"release_status_reports",

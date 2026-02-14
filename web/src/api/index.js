@@ -456,6 +456,16 @@ export const api = {
     return request.delete(`/release/projects/${id}`)
   },
 
+  // 获取项目统计信息
+  getProjectStats(projectId) {
+    return request.get(`/release/projects/${projectId}/stats`)
+  },
+
+  // 获取活跃告警列表
+  getActiveAlerts(params = {}) {
+    return request.get('/alerts', { params: { ...params, status: 'firing' } })
+  },
+
   // 环境管理
   getEnvironments(projectId) {
     return request.get(`/release/projects/${projectId}/environments`)
@@ -496,27 +506,6 @@ export const api = {
 
   deleteTarget(id) {
     return request.delete(`/release/targets/${id}`)
-  },
-
-  // 流水线管理
-  getPipelines(projectId) {
-    return request.get(`/release/projects/${projectId}/pipelines`)
-  },
-
-  getPipeline(id) {
-    return request.get(`/release/pipelines/${id}`)
-  },
-
-  createPipeline(projectId, data) {
-    return request.post(`/release/projects/${projectId}/pipelines`, data)
-  },
-
-  updatePipeline(id, data) {
-    return request.put(`/release/pipelines/${id}`, data)
-  },
-
-  deletePipeline(id) {
-    return request.delete(`/release/pipelines/${id}`)
   },
 
   // 发布管理

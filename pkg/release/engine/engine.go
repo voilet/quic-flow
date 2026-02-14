@@ -73,7 +73,6 @@ func (e *Engine) SetTargetUpdateHandler(handler func(releaseID, targetID string,
 type CreateReleaseRequest struct {
 	ProjectID     string
 	EnvironmentID string
-	PipelineID    string
 	Version       string
 	Operation     models.OperationType
 	Variables     map[string]string
@@ -95,12 +94,6 @@ func (e *Engine) CreateRelease(ctx context.Context, req *CreateReleaseRequest) (
 	var env models.Environment
 	if err := e.db.WithContext(ctx).First(&env, "id = ?", req.EnvironmentID).Error; err != nil {
 		return nil, fmt.Errorf("environment not found: %w", err)
-	}
-
-	// 验证流水线
-	var pipeline models.Pipeline
-	if err := e.db.WithContext(ctx).First(&pipeline, "id = ?", req.PipelineID).Error; err != nil {
-		return nil, fmt.Errorf("pipeline not found: %w", err)
 	}
 
 	// 获取目标列表
@@ -154,7 +147,6 @@ func (e *Engine) CreateRelease(ctx context.Context, req *CreateReleaseRequest) (
 	release := &models.Release{
 		ProjectID:     req.ProjectID,
 		EnvironmentID: req.EnvironmentID,
-		PipelineID:    req.PipelineID,
 		Version:       req.Version,
 		Operation:     operation,
 		Status:        status,
@@ -252,12 +244,6 @@ func (e *Engine) executeRelease(ctx context.Context, release *models.Release) {
 		return
 	}
 
-	var pipeline models.Pipeline
-	if err := e.db.WithContext(ctx).First(&pipeline, "id = ?", release.PipelineID).Error; err != nil {
-		e.failRelease(ctx, release, fmt.Sprintf("load pipeline: %v", err))
-		return
-	}
-
 	var targets []models.Target
 	if len(release.TargetIDs) > 0 {
 		e.db.WithContext(ctx).Where("id IN ?", release.TargetIDs).Find(&targets)
@@ -268,13 +254,13 @@ func (e *Engine) executeRelease(ctx context.Context, release *models.Release) {
 	// 根据策略执行
 	switch release.Strategy.Type {
 	case models.StrategyTypeRolling:
-		e.executeRolling(ctx, release, &project, &env, &pipeline, targets)
+		e.executeRolling(ctx, release, &project, &env, targets)
 	case models.StrategyTypeCanary:
-		e.executeCanary(ctx, release, &project, &env, &pipeline, targets)
+		e.executeCanary(ctx, release, &project, &env, targets)
 	case models.StrategyTypeBlueGreen:
-		e.executeBlueGreen(ctx, release, &project, &env, &pipeline, targets)
+		e.executeBlueGreen(ctx, release, &project, &env, targets)
 	default:
-		e.executeRolling(ctx, release, &project, &env, &pipeline, targets)
+		e.executeRolling(ctx, release, &project, &env, targets)
 	}
 }
 
@@ -284,7 +270,6 @@ func (e *Engine) executeRolling(
 	release *models.Release,
 	project *models.Project,
 	env *models.Environment,
-	pipeline *models.Pipeline,
 	targets []models.Target,
 ) {
 	batchSize := release.Strategy.BatchSize
@@ -307,7 +292,7 @@ func (e *Engine) executeRolling(
 			wg.Add(1)
 			go func(t models.Target) {
 				defer wg.Done()
-				e.executeTarget(ctx, release, project, env, pipeline, &t)
+				e.executeTarget(ctx, release, project, env, &t)
 			}(target)
 		}
 		wg.Wait()
@@ -334,7 +319,6 @@ func (e *Engine) executeCanary(
 	release *models.Release,
 	project *models.Project,
 	env *models.Environment,
-	pipeline *models.Pipeline,
 	targets []models.Target,
 ) {
 	// 分离金丝雀目标和正常目标
@@ -369,7 +353,7 @@ func (e *Engine) executeCanary(
 
 	// 执行金丝雀目标
 	for _, target := range canaryTargets {
-		e.executeTarget(ctx, release, project, env, pipeline, &target)
+		e.executeTarget(ctx, release, project, env, &target)
 	}
 
 	// 检查金丝雀是否成功
@@ -395,7 +379,7 @@ func (e *Engine) executeCanary(
 
 	// 执行剩余目标
 	for _, target := range normalTargets {
-		e.executeTarget(ctx, release, project, env, pipeline, &target)
+		e.executeTarget(ctx, release, project, env, &target)
 	}
 
 	e.completeRelease(ctx, release)
@@ -407,7 +391,6 @@ func (e *Engine) executeBlueGreen(
 	release *models.Release,
 	project *models.Project,
 	env *models.Environment,
-	pipeline *models.Pipeline,
 	targets []models.Target,
 ) {
 	// 蓝绿发布：先部署到所有目标，然后切换流量
@@ -416,7 +399,7 @@ func (e *Engine) executeBlueGreen(
 		wg.Add(1)
 		go func(t models.Target) {
 			defer wg.Done()
-			e.executeTarget(ctx, release, project, env, pipeline, &t)
+			e.executeTarget(ctx, release, project, env, &t)
 		}(target)
 	}
 	wg.Wait()
@@ -438,7 +421,6 @@ func (e *Engine) executeTarget(
 	release *models.Release,
 	project *models.Project,
 	env *models.Environment,
-	pipeline *models.Pipeline,
 	target *models.Target,
 ) {
 	now := time.Now()
