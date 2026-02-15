@@ -1,24 +1,12 @@
 <template>
   <div class="project-workspace">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div>
-        <h2>项目工作台</h2>
-        <p class="subtitle">选择一个项目进入工作台，或创建新项目</p>
-      </div>
-      <el-button type="primary" size="large" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>
-        创建新项目
-      </el-button>
-    </div>
-
-    <!-- 项目统计 -->
+    <!-- 统计卡片 -->
     <el-row :gutter="20" class="stats-row">
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
-            <div class="stat-icon" style="background: #ecf5ff; color: #409eff">
-              <el-icon><FolderOpened /></el-icon>
+            <div class="stat-icon primary">
+              <el-icon :size="30"><FolderOpened /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ projects.length }}</div>
@@ -30,8 +18,8 @@
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a">
-              <el-icon><SuccessFilled /></el-icon>
+            <div class="stat-icon success">
+              <el-icon :size="30"><SuccessFilled /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ activeProjectCount }}</div>
@@ -43,8 +31,8 @@
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
-            <div class="stat-icon" style="background: #fef0f0; color: #f56c6c">
-              <el-icon><WarningFilled /></el-icon>
+            <div class="stat-icon warning">
+              <el-icon :size="30"><WarningFilled /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ alertCount }}</div>
@@ -56,8 +44,8 @@
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
-            <div class="stat-icon" style="background: #fff7e6; color: #e6a23c">
-              <el-icon><Timer /></el-icon>
+            <div class="stat-icon info">
+              <el-icon :size="30"><Timer /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ executionCount }}</div>
@@ -69,97 +57,129 @@
     </el-row>
 
     <!-- 项目列表 -->
-    <el-card shadow="never" class="projects-card">
+    <el-card shadow="never" class="list-card">
       <template #header>
         <div class="card-header">
           <span>项目列表</span>
           <div class="header-actions">
+            <!-- 搜索框 -->
             <el-input
               v-model="searchKeyword"
-              placeholder="搜索项目..."
-              style="width: 200px"
+              placeholder="搜索项目名称"
+              :prefix-icon="Search"
               clearable
+              style="width: 200px"
+              @keyup.enter="handleSearch"
+              @clear="handleSearchClear"
+            />
+            <el-select
+              v-model="typeFilter"
+              placeholder="项目类型"
+              clearable
+              style="width: 120px"
+              @change="handleSearch"
             >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-            <el-select v-model="typeFilter" placeholder="项目类型" clearable style="width: 120px">
               <el-option label="全部" value="" />
               <el-option label="部署" value="deploy" />
               <el-option label="运维" value="operations" />
               <el-option label="CI/CD" value="cicd" />
               <el-option label="自定义" value="custom" />
             </el-select>
+            <el-button type="primary" @click="showCreateDialog = true">
+              <el-icon><Plus /></el-icon>
+              新建项目
+            </el-button>
+            <el-button @click="loadProjects" :loading="loading">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
           </div>
         </div>
       </template>
 
-      <el-empty v-if="filteredProjects.length === 0" description="暂无项目">
+      <!-- 项目表格 -->
+      <el-table
+        v-loading="loading"
+        :data="filteredProjects"
+        stripe
+        style="width: 100%"
+      >
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="name" label="项目名称" min-width="180">
+          <template #default="{ row }">
+            <div class="project-name-cell">
+              <el-icon class="project-icon" :color="getProjectColor(row.type)">
+                <component :is="getProjectIcon(row.type)" />
+              </el-icon>
+              <span class="project-name">{{ row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getProjectTypeTag(row.type)" size="small">
+              {{ getProjectTypeLabel(row.type) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+        <el-table-column label="执行次数" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag type="info" size="small">{{ row.execution_count || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="配置数" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag type="info" size="small">{{ row.config_count || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="告警" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.alert_count > 0" type="danger" size="small">
+              {{ row.alert_count }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.has_active_alert" type="danger" size="small">
+              <el-icon><Warning /></el-icon>
+              异常
+            </el-tag>
+            <el-tag v-else type="success" size="small">
+              <el-icon><SuccessFilled /></el-icon>
+              正常
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updated_at" label="更新时间" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="240" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="enterProject(row)">
+              <el-icon><FolderOpened /></el-icon>
+              进入
+            </el-button>
+            <el-button link type="primary" @click="editProject(row)">
+              <el-icon><Edit /></el-icon>
+              编辑
+            </el-button>
+            <el-button link type="danger" @click="deleteProject(row)">
+              <el-icon><Delete /></el-icon>
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 空状态 -->
+      <el-empty v-if="!loading && filteredProjects.length === 0" description="暂无项目">
         <el-button type="primary" @click="showCreateDialog = true">创建第一个项目</el-button>
       </el-empty>
-
-      <el-row :gutter="20" v-else>
-        <el-col :span="8" v-for="project in filteredProjects" :key="project.id">
-          <el-card shadow="hover" class="project-card" @click="enterProject(project)">
-            <template #header>
-              <div class="project-card-header">
-                <div class="project-info">
-                  <el-icon class="project-icon" :color="getProjectColor(project.type)">
-                    <component :is="getProjectIcon(project.type)" />
-                  </el-icon>
-                  <span class="project-name">{{ project.name }}</span>
-                </div>
-                <el-tag :type="getProjectTypeTag(project.type)" size="small">
-                  {{ getProjectTypeLabel(project.type) }}
-                </el-tag>
-              </div>
-            </template>
-
-            <div class="project-description">
-              {{ project.description || '暂无描述' }}
-            </div>
-
-            <div class="project-meta">
-              <div class="meta-item">
-                <el-icon><VideoPlay /></el-icon>
-                <span>{{ project.execution_count || 0 }} 次执行</span>
-              </div>
-              <div class="meta-item">
-                <el-icon><Files /></el-icon>
-                <span>{{ project.config_count || 0 }} 项配置</span>
-              </div>
-              <div class="meta-item">
-                <el-icon><Bell /></el-icon>
-                <span>{{ project.alert_count || 0 }} 条告警</span>
-              </div>
-            </div>
-
-            <div class="project-actions" @click.stop>
-              <el-button text @click="editProject(project)">
-                <el-icon><Edit /></el-icon>
-                编辑
-              </el-button>
-              <el-divider direction="vertical" />
-              <el-button text type="danger" @click="deleteProject(project)">
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
-            </div>
-
-            <div class="project-status">
-              <el-tag v-if="project.has_active_alert" type="danger" size="small">
-                <el-icon><Warning /></el-icon>
-                有告警
-              </el-tag>
-              <el-tag v-else type="success" size="small">
-                <el-icon><SuccessFilled /></el-icon>
-                正常
-              </el-tag>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
     </el-card>
 
     <!-- 创建/编辑项目对话框 -->
@@ -174,7 +194,7 @@
           <el-input v-model="form.name" placeholder="请输入项目名称" />
         </el-form-item>
         <el-form-item label="项目类型" prop="type">
-          <el-select v-model="form.type" placeholder="请选择项目类型">
+          <el-select v-model="form.type" placeholder="请选择项目类型" style="width: 100%">
             <el-option label="部署项目" value="deploy" />
             <el-option label="运维项目" value="operations" />
             <el-option label="CI/CD 项目" value="cicd" />
@@ -205,14 +225,16 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Plus, FolderOpened, SuccessFilled, WarningFilled, Timer, Search,
-  VideoPlay, Files, Bell, Warning, Edit, Delete
+  Plus, Refresh, Search, FolderOpened, SuccessFilled, WarningFilled, Timer,
+  Warning, Edit, Delete, Upload, Tools
 } from '@element-plus/icons-vue'
 import api from '@/api'
+import dayjs from 'dayjs'
 
 const router = useRouter()
 
 // 数据
+const loading = ref(false)
 const projects = ref([])
 const searchKeyword = ref('')
 const typeFilter = ref('')
@@ -222,9 +244,9 @@ const saving = ref(false)
 const formRef = ref()
 
 // 统计数据
-const activeProjectCount = ref(0)
-const alertCount = ref(0)
-const executionCount = ref(0)
+const activeProjectCount = computed(() => projects.value.filter(p => p.enabled !== false).length)
+const alertCount = computed(() => projects.value.reduce((sum, p) => sum + (p.alert_count || 0), 0))
+const executionCount = computed(() => projects.value.reduce((sum, p) => sum + (p.today_executions || 0), 0))
 
 // 表单数据
 const form = ref({
@@ -251,16 +273,25 @@ const filteredProjects = computed(() => {
 
 // 加载项目列表
 const loadProjects = async () => {
+  loading.value = true
   try {
     const data = await api.getProjects()
     projects.value = data || []
-    // 计算统计数据
-    activeProjectCount.value = projects.value.filter(p => p.enabled !== false).length
-    alertCount.value = projects.value.reduce((sum, p) => sum + (p.alert_count || 0), 0)
-    executionCount.value = projects.value.reduce((sum, p) => sum + (p.today_executions || 0), 0)
   } catch (error) {
     ElMessage.error('加载项目列表失败')
+  } finally {
+    loading.value = false
   }
+}
+
+// 搜索
+const handleSearch = () => {
+  // 搜索已通过 computed 自动处理
+}
+
+// 清除搜索
+const handleSearchClear = () => {
+  searchKeyword.value = ''
 }
 
 // 进入项目
@@ -310,10 +341,8 @@ const saveProject = async () => {
       await api.updateProject(editingProject.value.id, form.value)
       ElMessage.success('更新成功')
     } else {
-      const data = await api.createProject(form.value)
+      await api.createProject(form.value)
       ElMessage.success('创建成功')
-      // 自动进入新项目
-      enterProject(data)
     }
     showCreateDialog.value = false
     loadProjects()
@@ -328,6 +357,11 @@ const saveProject = async () => {
 const resetForm = () => {
   formRef.value?.resetFields()
   editingProject.value = null
+}
+
+// 格式化日期
+const formatDate = (date) => {
+  return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-'
 }
 
 // 获取项目类型标签
@@ -353,12 +387,12 @@ const getProjectTypeLabel = (type) => {
 
 const getProjectIcon = (type) => {
   const map = {
-    deploy: 'Upload',
-    operations: 'Tools',
-    cicd: 'Timer',
-    custom: 'Folder'
+    deploy: Upload,
+    operations: Tools,
+    cicd: Timer,
+    custom: FolderOpened
   }
-  return map[type] || 'Folder'
+  return map[type] || FolderOpened
 }
 
 const getProjectColor = (type) => {
@@ -382,37 +416,13 @@ onMounted(() => {
   padding: 20px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.page-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.subtitle {
-  margin: 0;
-  color: #909399;
-  font-size: 14px;
-}
-
+/* 统计卡片样式 */
 .stats-row {
   margin-bottom: 20px;
 }
 
 .stat-card {
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
+  cursor: default;
 }
 
 .stat-content {
@@ -422,13 +432,32 @@ onMounted(() => {
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+}
+
+.stat-icon.primary {
+  background: rgba(64, 158, 255, 0.1);
+  color: #409eff;
+}
+
+.stat-icon.success {
+  background: rgba(103, 194, 58, 0.1);
+  color: #67c23a;
+}
+
+.stat-icon.warning {
+  background: rgba(230, 162, 60, 0.1);
+  color: #e6a23c;
+}
+
+.stat-icon.info {
+  background: rgba(144, 147, 153, 0.1);
+  color: #909399;
 }
 
 .stat-info {
@@ -436,20 +465,21 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 600;
   color: #303133;
   line-height: 1;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 14px;
   color: #909399;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
-.projects-card {
-  min-height: 400px;
+/* 列表卡片样式 */
+.list-card {
+  margin-bottom: 20px;
 }
 
 .card-header {
@@ -460,78 +490,26 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 10px;
-}
-
-.project-card {
-  cursor: pointer;
-  margin-bottom: 20px;
-  transition: all 0.3s;
-  position: relative;
-}
-
-.project-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.project-card-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
-.project-info {
+/* 项目名称单元格 */
+.project-name-cell {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .project-icon {
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .project-name {
-  font-weight: 600;
-  font-size: 16px;
-  color: #303133;
+  font-weight: 500;
 }
 
-.project-description {
-  color: #606266;
-  font-size: 14px;
-  margin: 12px 0;
-  min-height: 40px;
-  line-height: 1.6;
-}
-
-.project-meta {
-  display: flex;
-  gap: 20px;
-  margin: 12px 0;
-  padding: 12px 0;
-  border-top: 1px solid #ebeef5;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #909399;
-}
-
-.project-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.project-status {
-  position: absolute;
-  top: 12px;
-  right: 12px;
+.text-muted {
+  color: #c0c4cc;
 }
 </style>
