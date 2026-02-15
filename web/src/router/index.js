@@ -16,6 +16,10 @@ const routes = [
   },
   {
     path: '/',
+    redirect: '/workspace'
+  },
+  {
+    path: '/clients',
     name: 'ClientList',
     component: () => import('@/views/ClientList.vue'),
     meta: { title: '客户端列表' }

@@ -10,43 +10,6 @@
         <h2>QUIC Flow</h2>
       </div>
 
-      <!-- 项目管理 - 独立且明显的区域 -->
-      <div class="project-management-section" v-if="!isProjectRoute">
-        <div class="section-header">
-          <el-icon class="section-icon"><FolderOpened /></el-icon>
-          <span class="section-title">项目管理</span>
-        </div>
-        <div class="project-selector">
-          <el-select
-            v-model="selectedProjectId"
-            placeholder="选择项目进入工作台"
-            @change="goToProject"
-            style="width: 100%"
-            size="large"
-          >
-            <el-option
-              v-for="project in projects"
-              :key="project.id"
-              :label="project.name"
-              :value="project.id"
-            >
-              <div class="project-option">
-                <span class="project-name">{{ project.name }}</span>
-                <el-tag size="small" :type="getProjectTypeTag(project.type)">
-                  {{ getProjectTypeLabel(project.type) }}
-                </el-tag>
-              </div>
-            </el-option>
-            <template #footer>
-              <el-button text @click="showCreateProject" style="width: 100%">
-                <el-icon><Plus /></el-icon>
-                创建新项目
-              </el-button>
-            </template>
-          </el-select>
-        </div>
-      </div>
-
       <!-- 项目内导航 -->
       <div class="project-nav" v-if="isProjectRoute">
         <div class="current-project">
@@ -151,13 +114,19 @@
 
         <!-- 非项目路由：显示全局功能 -->
         <template v-else>
+          <!-- 项目管理 -->
+          <el-menu-item index="/workspace">
+            <el-icon><FolderOpened /></el-icon>
+            <span>项目管理</span>
+          </el-menu-item>
+
           <!-- 客户端管理 -->
           <el-sub-menu index="client">
             <template #title>
               <el-icon><Monitor /></el-icon>
               <span>客户端管理</span>
             </template>
-            <el-menu-item index="/">
+            <el-menu-item index="/clients">
               <el-icon><Platform /></el-icon>
               <span>客户端列表</span>
             </el-menu-item>
@@ -387,7 +356,6 @@ const userStore = useUserStore()
 
 // 项目相关
 const projects = ref([])
-const selectedProjectId = ref(null)
 const currentProject = ref(null)
 
 // 判断是否是项目路由
@@ -426,46 +394,9 @@ const loadProjects = async () => {
   }
 }
 
-// 进入项目
-const goToProject = (projectId) => {
-  if (projectId) {
-    router.push({
-      path: '/project/overview',
-      query: { projectId }
-    })
-  }
-}
-
 // 返回项目列表
 const backToProjects = () => {
-  router.push('/')
-}
-
-// 显示创建项目对话框
-const showCreateProject = () => {
-  ElMessageBox.prompt('请输入项目名称', '创建新项目', {
-    confirmButtonText: '创建',
-    cancelButtonText: '取消',
-    inputPattern: /.+/,
-    inputErrorMessage: '项目名称不能为空'
-  }).then(async ({ value }) => {
-    try {
-      await api.createProject({
-        name: value,
-        type: 'custom',
-        description: ''
-      })
-      ElMessage.success('项目创建成功')
-      await loadProjects()
-      // 自动进入新项目
-      const newProject = projects.value.find(p => p.name === value)
-      if (newProject) {
-        goToProject(newProject.id)
-      }
-    } catch (error) {
-      ElMessage.error(error.message || '创建失败')
-    }
-  }).catch(() => {})
+  router.push('/workspace')
 }
 
 // 项目操作
@@ -552,7 +483,8 @@ const pageTitle = computed(() => {
   }
 
   const titles = {
-    '/': '项目工作台',
+    '/workspace': '项目管理',
+    '/clients': '客户端列表',
     '/command': '命令下发',
     '/history': '命令历史',
     '/terminal': 'SSH 终端',
@@ -733,61 +665,7 @@ const dbStatus = computed(() => {
   transition: color 0.3s ease;
 }
 
-/* 项目管理区域 - 独立且明显 */
-.project-management-section {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(64, 158, 255, 0.05) 100%);
-  border-bottom: 2px solid var(--tech-primary);
-  margin-bottom: 8px;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
-  position: relative;
-  overflow: hidden;
-}
-
-.project-management-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--tech-gradient-primary);
-  opacity: 0.6;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px 8px;
-  color: var(--tech-primary);
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-}
-
-.section-icon {
-  font-size: 18px;
-  color: var(--tech-primary);
-}
-
-.section-title {
-  flex: 1;
-}
-
-.project-selector {
-  padding: 8px 16px 16px;
-}
-
-.project-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.project-option .project-name {
-  flex: 1;
-}
-
+/* 项目导航 */
 .project-nav {
   padding: 12px 16px;
   border-bottom: 1px solid var(--tech-border);
