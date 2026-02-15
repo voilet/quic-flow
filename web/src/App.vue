@@ -10,262 +10,162 @@
         <h2>QUIC Flow</h2>
       </div>
 
-      <!-- 项目内导航 -->
-      <div class="project-nav" v-if="isProjectRoute">
-        <div class="current-project">
-          <el-button text @click="backToProjects">
-            <el-icon><ArrowLeft /></el-icon>
-          </el-button>
-          <span class="project-name">{{ currentProject?.name }}</span>
-          <el-dropdown @command="handleProjectAction">
-            <el-icon class="more-icon"><MoreFilled /></el-icon>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="settings">项目设置</el-dropdown-item>
-                <el-dropdown-item command="members">成员管理</el-dropdown-item>
-                <el-dropdown-item command="exit" divided>退出项目</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
-
       <el-menu
         :default-active="$route.path"
         router
         class="el-menu-vertical"
       >
-        <!-- 项目路由：显示项目内功能 -->
-        <template v-if="isProjectRoute">
-          <el-menu-item :index="menuPaths.overview">
-            <el-icon><DataBoard /></el-icon>
-            <span>项目概览</span>
+        <!-- 项目管理 -->
+        <el-menu-item index="/workspace">
+          <el-icon><FolderOpened /></el-icon>
+          <span>项目管理</span>
+        </el-menu-item>
+
+        <!-- 客户端管理 -->
+        <el-sub-menu index="client">
+          <template #title>
+            <el-icon><Monitor /></el-icon>
+            <span>客户端管理</span>
+          </template>
+          <el-menu-item index="/clients">
+            <el-icon><Platform /></el-icon>
+            <span>客户端列表</span>
           </el-menu-item>
-
-          <el-sub-menu index="config">
-            <template #title>
-              <el-icon><Setting /></el-icon>
-              <span>配置中心</span>
-            </template>
-            <el-menu-item :index="menuPaths.config">
-              <el-icon><Files /></el-icon>
-              <span>配置管理</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.configHistory">
-              <el-icon><Clock /></el-icon>
-              <span>变更历史</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.configReleases">
-              <el-icon><Upload /></el-icon>
-              <span>发布管理</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.configGrayRules">
-              <el-icon><Operation /></el-icon>
-              <span>灰度规则</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.configSubscribers">
-              <el-icon><User /></el-icon>
-              <span>订阅者</span>
-            </el-menu-item>
-          </el-sub-menu>
-
-          <el-sub-menu index="alert">
-            <template #title>
-              <el-icon><Warning /></el-icon>
-              <span>告警管理</span>
-            </template>
-            <el-menu-item :index="menuPaths.alerts">
-              <el-icon><Bell /></el-icon>
-              <span>告警列表</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.alertRules">
-              <el-icon><Document /></el-icon>
-              <span>规则管理</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.alertChannels">
-              <el-icon><Connection /></el-icon>
-              <span>通知渠道</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.silenceRules">
-              <el-icon><MuteNotification /></el-icon>
-              <span>抑制规则</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.oncall">
-              <el-icon><Calendar /></el-icon>
-              <span>值班管理</span>
-            </el-menu-item>
-          </el-sub-menu>
-
-          <el-sub-menu index="release">
-            <template #title>
-              <el-icon><Upload /></el-icon>
-              <span>发布管理</span>
-            </template>
-            <el-menu-item :index="menuPaths.versions">
-              <el-icon><PriceTag /></el-icon>
-              <span>版本管理</span>
-            </el-menu-item>
-            <el-menu-item :index="menuPaths.deployments">
-              <el-icon><Document /></el-icon>
-              <span>部署记录</span>
-            </el-menu-item>
-          </el-sub-menu>
-        </template>
-
-        <!-- 非项目路由：显示全局功能 -->
-        <template v-else>
-          <!-- 项目管理 -->
-          <el-menu-item index="/workspace">
-            <el-icon><FolderOpened /></el-icon>
-            <span>项目管理</span>
+          <el-menu-item index="/client-tags">
+            <el-icon><PriceTag /></el-icon>
+            <span>客户端标签</span>
           </el-menu-item>
+          <el-menu-item index="/terminal">
+            <el-icon><Monitor /></el-icon>
+            <span>SSH 终端</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-          <!-- 客户端管理 -->
-          <el-sub-menu index="client">
-            <template #title>
-              <el-icon><Monitor /></el-icon>
-              <span>客户端管理</span>
-            </template>
-            <el-menu-item index="/clients">
-              <el-icon><Platform /></el-icon>
-              <span>客户端列表</span>
-            </el-menu-item>
-            <el-menu-item index="/client-tags">
-              <el-icon><PriceTag /></el-icon>
-              <span>客户端标签</span>
-            </el-menu-item>
-            <el-menu-item index="/terminal">
-              <el-icon><Monitor /></el-icon>
-              <span>SSH 终端</span>
-            </el-menu-item>
-          </el-sub-menu>
-
-          <!-- 命令管理 -->
-          <el-sub-menu index="command">
-            <template #title>
-              <el-icon><ChatDotRound /></el-icon>
-              <span>命令管理</span>
-            </template>
-            <el-menu-item index="/command">
-              <el-icon><Promotion /></el-icon>
-              <span>命令下发</span>
-            </el-menu-item>
-            <el-menu-item index="/history">
-              <el-icon><Clock /></el-icon>
-              <span>命令历史</span>
-            </el-menu-item>
-            <el-menu-item index="/audit">
-              <el-icon><Document /></el-icon>
-              <span>命令审计</span>
-            </el-menu-item>
-            <el-menu-item index="/recordings">
-              <el-icon><VideoCamera /></el-icon>
-              <span>会话录像</span>
-            </el-menu-item>
-          </el-sub-menu>
-
-          <!-- 脚本管理 -->
-          <el-menu-item index="/scripts">
+        <!-- 命令管理 -->
+        <el-sub-menu index="command">
+          <template #title>
+            <el-icon><ChatDotRound /></el-icon>
+            <span>命令管理</span>
+          </template>
+          <el-menu-item index="/command">
+            <el-icon><Promotion /></el-icon>
+            <span>命令下发</span>
+          </el-menu-item>
+          <el-menu-item index="/history">
+            <el-icon><Clock /></el-icon>
+            <span>命令历史</span>
+          </el-menu-item>
+          <el-menu-item index="/audit">
             <el-icon><Document /></el-icon>
-            <span>脚本管理</span>
+            <span>命令审计</span>
           </el-menu-item>
+          <el-menu-item index="/recordings">
+            <el-icon><VideoCamera /></el-icon>
+            <span>会话录像</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-          <!-- 全局告警中心 -->
-          <el-sub-menu index="global-alert">
-            <template #title>
-              <el-icon><Warning /></el-icon>
-              <span>告警中心</span>
-            </template>
-            <el-menu-item index="/alerts">
-              <el-icon><Bell /></el-icon>
-              <span>全部告警</span>
-            </el-menu-item>
-            <el-menu-item index="/alert-channels">
-              <el-icon><Connection /></el-icon>
-              <span>通知渠道</span>
-            </el-menu-item>
-            <el-menu-item index="/silence-rules">
-              <el-icon><MuteNotification /></el-icon>
-              <span>抑制规则</span>
-            </el-menu-item>
-          </el-sub-menu>
+        <!-- 脚本管理 -->
+        <el-menu-item index="/scripts">
+          <el-icon><Document /></el-icon>
+          <span>脚本管理</span>
+        </el-menu-item>
 
-          <!-- 配置中心 -->
-          <el-sub-menu index="global-config">
-            <template #title>
-              <el-icon><Setting /></el-icon>
-              <span>配置中心</span>
-            </template>
-            <el-menu-item index="/config">
-              <el-icon><Files /></el-icon>
-              <span>配置管理</span>
-            </el-menu-item>
-            <el-menu-item index="/config/history">
-              <el-icon><Clock /></el-icon>
-              <span>变更历史</span>
-            </el-menu-item>
-            <el-menu-item index="/config/releases">
-              <el-icon><Upload /></el-icon>
-              <span>发布管理</span>
-            </el-menu-item>
-            <el-menu-item index="/config/gray-rules">
-              <el-icon><Operation /></el-icon>
-              <span>灰度规则</span>
-            </el-menu-item>
-            <el-menu-item index="/config/subscribers">
-              <el-icon><User /></el-icon>
-              <span>订阅者</span>
-            </el-menu-item>
-          </el-sub-menu>
+        <!-- 告警中心 -->
+        <el-sub-menu index="global-alert">
+          <template #title>
+            <el-icon><Warning /></el-icon>
+            <span>告警中心</span>
+          </template>
+          <el-menu-item index="/alerts">
+            <el-icon><Bell /></el-icon>
+            <span>全部告警</span>
+          </el-menu-item>
+          <el-menu-item index="/alert-channels">
+            <el-icon><Connection /></el-icon>
+            <span>通知渠道</span>
+          </el-menu-item>
+          <el-menu-item index="/silence-rules">
+            <el-icon><MuteNotification /></el-icon>
+            <span>抑制规则</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-          <!-- 定时任务 -->
-          <el-sub-menu index="task">
-            <template #title>
-              <el-icon><Timer /></el-icon>
-              <span>定时任务</span>
-            </template>
-            <el-menu-item index="/task">
-              <el-icon><List /></el-icon>
-              <span>任务列表</span>
-            </el-menu-item>
-            <el-menu-item index="/task/execution">
-              <el-icon><VideoPlay /></el-icon>
-              <span>执行记录</span>
-            </el-menu-item>
-          </el-sub-menu>
+        <!-- 配置中心 -->
+        <el-sub-menu index="global-config">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>配置中心</span>
+          </template>
+          <el-menu-item index="/config">
+            <el-icon><Files /></el-icon>
+            <span>配置管理</span>
+          </el-menu-item>
+          <el-menu-item index="/config/history">
+            <el-icon><Clock /></el-icon>
+            <span>变更历史</span>
+          </el-menu-item>
+          <el-menu-item index="/config/releases">
+            <el-icon><Upload /></el-icon>
+            <span>发布管理</span>
+          </el-menu-item>
+          <el-menu-item index="/config/gray-rules">
+            <el-icon><Operation /></el-icon>
+            <span>灰度规则</span>
+          </el-menu-item>
+          <el-menu-item index="/config/subscribers">
+            <el-icon><User /></el-icon>
+            <span>订阅者</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-          <!-- 系统工具 -->
-          <el-sub-menu index="tools">
-            <template #title>
-              <el-icon><Tools /></el-icon>
-              <span>系统工具</span>
-            </template>
-            <el-menu-item index="/filetransfer">
-              <el-icon><Folder /></el-icon>
-              <span>文件传输</span>
-            </el-menu-item>
-            <el-menu-item index="/profiling">
-              <el-icon><TrendCharts /></el-icon>
-              <span>性能分析</span>
-            </el-menu-item>
-          </el-sub-menu>
+        <!-- 定时任务 -->
+        <el-sub-menu index="task">
+          <template #title>
+            <el-icon><Timer /></el-icon>
+            <span>定时任务</span>
+          </template>
+          <el-menu-item index="/task">
+            <el-icon><List /></el-icon>
+            <span>任务列表</span>
+          </el-menu-item>
+          <el-menu-item index="/task/execution">
+            <el-icon><VideoPlay /></el-icon>
+            <span>执行记录</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-          <!-- 系统管理 -->
-          <el-sub-menu index="admin">
-            <template #title>
-              <el-icon><Lock /></el-icon>
-              <span>系统管理</span>
-            </template>
-            <el-menu-item index="/users">
-              <el-icon><User /></el-icon>
-              <span>用户管理</span>
-            </el-menu-item>
-            <el-menu-item index="/credentials">
-              <el-icon><Key /></el-icon>
-              <span>凭证中心</span>
-            </el-menu-item>
-          </el-sub-menu>
-        </template>
+        <!-- 系统工具 -->
+        <el-sub-menu index="tools">
+          <template #title>
+            <el-icon><Tools /></el-icon>
+            <span>系统工具</span>
+          </template>
+          <el-menu-item index="/filetransfer">
+            <el-icon><Folder /></el-icon>
+            <span>文件传输</span>
+          </el-menu-item>
+          <el-menu-item index="/profiling">
+            <el-icon><TrendCharts /></el-icon>
+            <span>性能分析</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 系统管理 -->
+        <el-sub-menu index="admin">
+          <template #title>
+            <el-icon><Lock /></el-icon>
+            <span>系统管理</span>
+          </template>
+          <el-menu-item index="/users">
+            <el-icon><User /></el-icon>
+            <span>用户管理</span>
+          </el-menu-item>
+          <el-menu-item index="/credentials">
+            <el-icon><Key /></el-icon>
+            <span>凭证中心</span>
+          </el-menu-item>
+        </el-sub-menu>
 
         <!-- 系统设置 -->
         <el-menu-item index="/setup" class="setup-menu-item">
@@ -399,89 +299,8 @@ const backToProjects = () => {
   router.push('/workspace')
 }
 
-// 项目操作
-const handleProjectAction = (command) => {
-  switch (command) {
-    case 'settings':
-      // TODO: 打开项目设置
-      ElMessage.info('项目设置功能开发中')
-      break
-    case 'members':
-      // TODO: 成员管理
-      ElMessage.info('成员管理功能开发中')
-      break
-    case 'exit':
-      backToProjects()
-      break
-  }
-}
-
-// 菜单路径计算属性（携带项目ID）
-const menuPaths = computed(() => {
-  const pid = currentProjectId.value
-  const query = pid ? `?projectId=${pid}` : ''
-  return {
-    overview: `/project/overview${query}`,
-    config: `/project/config${query}`,
-    configHistory: `/project/config/history${query}`,
-    configReleases: `/project/config/releases${query}`,
-    configGrayRules: `/project/config/gray-rules${query}`,
-    configSubscribers: `/project/config/subscribers${query}`,
-    executions: `/project/executions${query}`,
-    alerts: `/project/alerts${query}`,
-    alertRules: `/project/alert-rules${query}`,
-    alertChannels: `/project/alert-channels${query}`,
-    silenceRules: `/project/silence-rules${query}`,
-    oncall: `/project/oncall${query}`,
-    versions: `/project/versions${query}`,
-    deployments: `/project/deployments${query}`
-  }
-})
-
-// 获取项目类型标签
-const getProjectTypeTag = (type) => {
-  const map = {
-    deploy: '',
-    operations: 'success',
-    cicd: 'warning',
-    custom: 'info'
-  }
-  return map[type] || ''
-}
-
-const getProjectTypeLabel = (type) => {
-  const map = {
-    deploy: '部署',
-    operations: '运维',
-    cicd: 'CI/CD',
-    custom: '自定义'
-  }
-  return map[type] || type
-}
-
 // 页面标题
 const pageTitle = computed(() => {
-  if (isProjectRoute.value && currentProject.value) {
-    const titles = {
-      '/project/overview': '项目概览',
-      '/project/config': '配置中心',
-      '/project/config/history': '配置历史',
-      '/project/executions': '执行历史',
-      '/project/alerts': '告警列表',
-      '/project/alert-rules': '告警规则',
-      '/project/alert-channels': '通知渠道',
-      '/project/silence-rules': '抑制规则',
-      '/project/oncall': '值班管理',
-      '/project/config/releases': '发布管理',
-      '/project/config/gray-rules': '灰度规则',
-      '/project/config/subscribers': '订阅者',
-      '/project/versions': '版本管理',
-      '/project/deployments': '部署记录'
-    }
-    const baseTitle = titles[route.path] || '项目工作台'
-    return `${baseTitle} - ${currentProject.value.name}`
-  }
-
   const titles = {
     '/workspace': '项目管理',
     '/clients': '客户端列表',
@@ -506,6 +325,12 @@ const pageTitle = computed(() => {
     '/credentials': '凭证中心',
     '/setup': '数据库设置'
   }
+
+  // 如果是项目路由，显示项目名称
+  if (isProjectRoute.value && currentProject.value) {
+    return `${currentProject.value.name} - 发布管理`
+  }
+
   return titles[route.path] || 'QUIC Flow 管理系统'
 })
 
@@ -663,36 +488,6 @@ const dbStatus = computed(() => {
   position: relative;
   z-index: 1;
   transition: color 0.3s ease;
-}
-
-/* 项目导航 */
-.project-nav {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--tech-border);
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.05) 0%, rgba(64, 158, 255, 0.02) 100%);
-}
-
-.current-project {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.current-project .project-name {
-  flex: 1;
-  font-weight: 600;
-  color: var(--tech-primary);
-  font-size: 14px;
-}
-
-.current-project .more-icon {
-  cursor: pointer;
-  opacity: 0.6;
-  padding: 4px;
-}
-
-.current-project .more-icon:hover {
-  opacity: 1;
 }
 
 .logo:hover h2 {
