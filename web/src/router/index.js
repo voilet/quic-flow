@@ -21,6 +21,12 @@ const routes = [
     meta: { title: '客户端列表' }
   },
   {
+    path: '/client-tags',
+    name: 'ClientTags',
+    component: () => import('@/views/ClientTags.vue'),
+    meta: { title: '客户端标签' }
+  },
+  {
     path: '/command',
     name: 'CommandSend',
     component: () => import('@/views/CommandSend.vue'),
@@ -127,6 +133,12 @@ const routes = [
     name: 'TaskGroup',
     component: () => import('@/views/task/Group.vue'),
     meta: { title: '分组管理' }
+  },
+  {
+    path: '/scripts',
+    name: 'ScriptList',
+    component: () => import('@/views/script/List.vue'),
+    meta: { title: '脚本管理' }
   },
   {
     path: '/config',

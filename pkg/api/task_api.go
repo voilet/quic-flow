@@ -39,6 +39,9 @@ func (api *TaskAPI) RegisterRoutes(r *gin.RouterGroup) {
 		tasks.POST("/:id/disable", api.DisableTask)
 		tasks.POST("/:id/trigger", api.TriggerTask)
 		tasks.GET("/:id/next-run", api.GetNextRunTime)
+		// 新增 API - 执行统计
+		tasks.GET("/:id/stats", api.GetTaskStats)
+		tasks.POST("/:id/reset-stats", api.ResetTaskStats)
 	}
 	// 添加测试路由以验证注册是否成功
 	r.GET("/tasks-test", func(c *gin.Context) {
@@ -229,4 +232,39 @@ func (api *TaskAPI) GetNextRunTime(c *gin.Context) {
 	common.SuccessResp(c, gin.H{
 		"next_run_time": nextRun,
 	})
+}
+
+// GetTaskStats 获取任务统计信息
+func (api *TaskAPI) GetTaskStats(c *gin.Context) {
+	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
+		return
+	}
+
+	stats, err := api.taskManager.GetTaskStats(c.Request.Context(), taskID)
+	if err != nil {
+		api.logger.Error("Failed to get task stats", "task_id", taskID, "error", err)
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
+		return
+	}
+
+	common.SuccessResp(c, stats)
+}
+
+// ResetTaskStats 重置任务统计信息
+func (api *TaskAPI) ResetTaskStats(c *gin.Context) {
+	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		common.ErrorResp(c, common.CodeInvalidParams, "invalid task id")
+		return
+	}
+
+	if err := api.taskManager.ResetTaskStats(c.Request.Context(), taskID); err != nil {
+		api.logger.Error("Failed to reset task stats", "task_id", taskID, "error", err)
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
+		return
+	}
+
+	common.SuccessResp(c, struct{}{})
 }

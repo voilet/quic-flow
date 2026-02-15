@@ -94,6 +94,53 @@
         </div>
       </el-form-item>
 
+      <el-form-item label="时区">
+        <el-select v-model="form.timezone" placeholder="选择时区" style="width: 100%">
+          <el-option label="本地时区" value="Local" />
+          <el-option label="UTC" value="UTC" />
+          <el-option label="Asia/Shanghai" value="Asia/Shanghai" />
+          <el-option label="America/New_York" value="America/New_York" />
+          <el-option label="Europe/London" value="Europe/London" />
+        </el-select>
+      </el-form-item>
+
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <el-form-item label="开始时间">
+            <el-date-picker
+              v-model="form.start_time"
+              type="datetime"
+              placeholder="调度开始时间"
+              style="width: 100%"
+              format="YYYY-MM-DD HH:mm:ss"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="结束时间">
+            <el-date-picker
+              v-model="form.end_time"
+              type="datetime"
+              placeholder="调度结束时间"
+              style="width: 100%"
+              format="YYYY-MM-DD HH:mm:ss"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-form-item label="最大执行次数">
+        <el-input-number
+          v-model="form.max_executions"
+          :min="0"
+          :max="1000000"
+          style="width: 100%"
+        />
+        <div class="field-hint">设置为 0 表示不限制执行次数</div>
+      </el-form-item>
+
       <el-form-item label="超时时间(秒)" prop="timeout">
         <el-input-number
           v-model="form.timeout"
@@ -266,6 +313,11 @@ const form = reactive({
   executor_type: 1,
   executor_config: '',
   cron_expr: '',
+  // 增强调度字段
+  timezone: 'Local',
+  start_time: null,
+  end_time: null,
+  max_executions: 0,
   timeout: 300,
   retry_count: 0,
   retry_interval: 60,
@@ -367,6 +419,10 @@ const loadTask = async () => {
         executor_type: task.executor_type || 1,
         executor_config: task.executor_config || '',
         cron_expr: task.cron_expr || '',
+        timezone: task.timezone || 'Local',
+        start_time: task.start_time || null,
+        end_time: task.end_time || null,
+        max_executions: task.max_executions || 0,
         timeout: task.timeout || 300,
         retry_count: task.retry_count || 0,
         retry_interval: task.retry_interval || 60,
@@ -483,6 +539,10 @@ watch(dialogVisible, (val) => {
         executor_type: 1,
         executor_config: '',
         cron_expr: '',
+        timezone: 'Local',
+        start_time: null,
+        end_time: null,
+        max_executions: 0,
         timeout: 300,
         retry_count: 0,
         retry_interval: 60,
@@ -504,6 +564,12 @@ watch(dialogVisible, (val) => {
 
 <style scoped>
 .next-run-time {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.field-hint {
   margin-top: 5px;
   font-size: 12px;
   color: #909399;

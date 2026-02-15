@@ -30,8 +30,11 @@ import (
 	releaseapi "github.com/voilet/quic-flow/pkg/release/api"
 	releasemodels "github.com/voilet/quic-flow/pkg/release/models"
 	"github.com/voilet/quic-flow/pkg/router"
+	scriptapi "github.com/voilet/quic-flow/pkg/script/api"
+	scriptmodels "github.com/voilet/quic-flow/pkg/script/models"
+	scriptstore "github.com/voilet/quic-flow/pkg/script/store"
 	"github.com/voilet/quic-flow/pkg/task/scheduler"
-	"github.com/voilet/quic-flow/pkg/task/store"
+	taskstore "github.com/voilet/quic-flow/pkg/task/store"
 	"github.com/voilet/quic-flow/pkg/transport/server"
 	"github.com/voilet/quic-flow/pkg/version"
 
@@ -361,6 +364,27 @@ func runServer(cmd *cobra.Command, args []string) {
 		logger.Info("Config center API routes registered")
 	}
 
+	// ========== 脚本管理功能 ==========
+	// 创建脚本管理系统
+	if releaseDB != nil {
+		// 执行数据库迁移
+		if err := scriptmodels.Migrate(releaseDB); err != nil {
+			logger.Warn("Failed to migrate script tables", "error", err)
+		} else {
+			logger.Info("Script system database migration completed")
+		}
+
+		// 创建脚本存储和 API
+		scriptStore := scriptstore.NewScriptStore(releaseDB)
+		scriptAPI := scriptapi.NewScriptAPI(scriptStore, logger)
+
+		// 注册脚本管理 API 路由
+		scriptRouter := httpServer.GetRouter().Group("/api")
+		scriptAPI.RegisterRoutes(scriptRouter)
+
+		logger.Info("Script management API routes registered")
+	}
+
 	// ========== 告警系统功能 ==========
 	// 创建告警系统存储和 API 处理器
 	if releaseDB != nil {
@@ -499,12 +523,15 @@ func runServer(cmd *cobra.Command, args []string) {
 				logger.Error("Failed to setup task system via setup", "error", err)
 			} else if taskManager != nil {
 				// 创建存储层
-				taskStore := store.NewTaskStore(db)
-				executionStore := store.NewExecutionStore(db)
-				groupStore := store.NewGroupStore(db)
+				taskStore := taskstore.NewTaskStore(db)
+				executionStore := taskstore.NewExecutionStore(db)
+				groupStore := taskstore.NewGroupStore(db)
 
 				// 添加任务管理 API 路由
 				AddTaskRoutes(httpServer, taskManager, taskStore, executionStore, groupStore, taskWSAPI, logger)
+
+				// 添加客户端标签 API 路由
+				AddClientTagRoutes(httpServer, db, logger)
 
 				logger.Info("Task management system enabled via setup")
 			}
@@ -533,13 +560,16 @@ func runServer(cmd *cobra.Command, args []string) {
 				logger.Error("Failed to setup task system", "error", err)
 			} else if taskManager != nil {
 				// 创建存储层
-				taskStore := store.NewTaskStore(releaseDB)
-				executionStore := store.NewExecutionStore(releaseDB)
-				groupStore := store.NewGroupStore(releaseDB)
+				taskStore := taskstore.NewTaskStore(releaseDB)
+				executionStore := taskstore.NewExecutionStore(releaseDB)
+				groupStore := taskstore.NewGroupStore(releaseDB)
 
 				// 添加任务管理 API 路由（在 Start 之前）
 				logger.Info("Registering task management routes...")
 				AddTaskRoutes(httpServer, taskManager, taskStore, executionStore, groupStore, taskWSAPI, logger)
+
+				// 添加客户端标签 API 路由
+				AddClientTagRoutes(httpServer, releaseDB, logger)
 
 				logger.Info("Task management system enabled and routes registered")
 			} else {

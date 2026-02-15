@@ -161,6 +161,10 @@
               <el-icon><Platform /></el-icon>
               <span>客户端列表</span>
             </el-menu-item>
+            <el-menu-item index="/client-tags">
+              <el-icon><PriceTag /></el-icon>
+              <span>客户端标签</span>
+            </el-menu-item>
             <el-menu-item index="/terminal">
               <el-icon><Monitor /></el-icon>
               <span>SSH 终端</span>
@@ -190,6 +194,12 @@
               <span>会话录像</span>
             </el-menu-item>
           </el-sub-menu>
+
+          <!-- 脚本管理 -->
+          <el-menu-item index="/scripts">
+            <el-icon><Document /></el-icon>
+            <span>脚本管理</span>
+          </el-menu-item>
 
           <!-- 全局告警中心 -->
           <el-sub-menu index="global-alert">

@@ -68,12 +68,19 @@ type CreateTaskRequest struct {
 	ExecutorType   models.ExecutorType
 	ExecutorConfig string
 	CronExpr       string
-	Timeout        int
-	RetryCount     int
-	RetryInterval  int
-	Concurrency    int
-	CreatedBy      string
-	GroupIDs       []int64 // 关联的分组ID列表
+	
+	// 增强调度字段
+	Timezone      *string     // 时区
+	StartTime     *time.Time  // 调度开始时间
+	EndTime       *time.Time  // 调度结束时间
+	MaxExecutions int64       // 最大执行次数 (0=无限制)
+	
+	Timeout       int
+	RetryCount    int
+	RetryInterval int
+	Concurrency   int
+	CreatedBy     string
+	GroupIDs      []int64 // 关联的分组ID列表
 }
 
 // CreateTask 创建任务
@@ -85,12 +92,21 @@ func (m *TaskManager) CreateTask(ctx context.Context, req *CreateTaskRequest) (*
 		ExecutorType:   req.ExecutorType,
 		ExecutorConfig: req.ExecutorConfig,
 		CronExpr:       req.CronExpr,
+		Timezone:       "Local",
+		StartTime:      req.StartTime,
+		EndTime:        req.EndTime,
+		MaxExecutions:  req.MaxExecutions,
 		Timeout:        req.Timeout,
 		RetryCount:     req.RetryCount,
 		RetryInterval:  req.RetryInterval,
 		Concurrency:    req.Concurrency,
 		Status:         models.TaskStatusEnabled,
 		CreatedBy:      req.CreatedBy,
+	}
+	
+	// 设置时区
+	if req.Timezone != nil && *req.Timezone != "" {
+		task.Timezone = *req.Timezone
 	}
 
 	// 保存到数据库
@@ -136,12 +152,19 @@ type UpdateTaskRequest struct {
 	ExecutorType   *models.ExecutorType
 	ExecutorConfig *string
 	CronExpr       *string
-	Timeout        *int
-	RetryCount     *int
-	RetryInterval  *int
-	Concurrency    *int
-	Status         *models.TaskStatus
-	GroupIDs       []int64 // 如果提供，将替换所有分组关联
+	
+	// 增强调度字段
+	Timezone      *string     // 时区
+	StartTime     *time.Time  // 调度开始时间
+	EndTime       *time.Time  // 调度结束时间
+	MaxExecutions *int64      // 最大执行次数
+	
+	Timeout       *int
+	RetryCount    *int
+	RetryInterval *int
+	Concurrency   *int
+	Status        *models.TaskStatus
+	GroupIDs      []int64 // 如果提供，将替换所有分组关联
 }
 
 // UpdateTask 更新任务
@@ -167,6 +190,19 @@ func (m *TaskManager) UpdateTask(ctx context.Context, req *UpdateTaskRequest) er
 	}
 	if req.CronExpr != nil {
 		task.CronExpr = *req.CronExpr
+	}
+	// 更新增强调度字段
+	if req.Timezone != nil {
+		task.Timezone = *req.Timezone
+	}
+	if req.StartTime != nil {
+		task.StartTime = req.StartTime
+	}
+	if req.EndTime != nil {
+		task.EndTime = req.EndTime
+	}
+	if req.MaxExecutions != nil {
+		task.MaxExecutions = *req.MaxExecutions
 	}
 	if req.Timeout != nil {
 		task.Timeout = *req.Timeout
@@ -331,4 +367,35 @@ func (m *TaskManager) GetNextRunTime(taskID int64) (time.Time, error) {
 // GetConfigVersion 获取配置版本号
 func (m *TaskManager) GetConfigVersion() int64 {
 	return atomic.LoadInt64(&m.configVersion)
+}
+
+// GetTaskStats 获取任务统计信息
+func (m *TaskManager) GetTaskStats(ctx context.Context, taskID int64) (*store.TaskStats, error) {
+	return m.taskStore.GetTaskStats(ctx, taskID)
+}
+
+// ResetTaskStats 重置任务统计信息
+func (m *TaskManager) ResetTaskStats(ctx context.Context, taskID int64) error {
+	task, err := m.taskStore.GetByID(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+
+	// 重置统计
+	task.ExecutionCount = 0
+	task.SuccessCount = 0
+	task.FailedCount = 0
+	task.LastRunTime = nil
+
+	if err := m.taskStore.Update(ctx, task); err != nil {
+		return fmt.Errorf("failed to reset task stats: %w", err)
+	}
+
+	m.logger.Info("Task stats reset", "task_id", taskID)
+	return nil
+}
+
+// UpdateNextRunTime 更新下次执行时间
+func (m *TaskManager) UpdateNextRunTime(ctx context.Context, taskID int64, nextRunTime *time.Time) error {
+	return m.taskStore.UpdateNextRunTime(ctx, taskID, nextRunTime)
 }

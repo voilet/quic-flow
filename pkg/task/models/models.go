@@ -14,6 +14,8 @@ var AllModels = []interface{}{
 	&TaskGroup{},
 	&Execution{},
 	&Client{},
+	&ClientTag{},
+	&ClientTagRelation{},
 }
 
 // Migrate 执行数据库迁移
@@ -99,6 +101,8 @@ func createIndexes(db *gorm.DB, dbType string) error {
 		"CREATE INDEX IF NOT EXISTS idx_task_group ON tb_task_group_relation(task_id, group_id)",
 		"CREATE INDEX IF NOT EXISTS idx_execution_task_client ON tb_execution(task_id, client_id)",
 		"CREATE INDEX IF NOT EXISTS idx_execution_status_time ON tb_execution(status, created_at)",
+		"CREATE INDEX IF NOT EXISTS idx_client_tag_client ON tb_client_tag_relation(client_id)",
+		"CREATE INDEX IF NOT EXISTS idx_client_tag_tag ON tb_client_tag_relation(tag_id)",
 	}
 
 	for _, idx := range indexes {

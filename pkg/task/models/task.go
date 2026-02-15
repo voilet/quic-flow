@@ -31,6 +31,23 @@ type Task struct {
 	ExecutorType   ExecutorType `gorm:"not null;comment:执行器类型:1=Shell,2=HTTP,3=Plugin" json:"executor_type"`
 	ExecutorConfig string      `gorm:"type:text;not null;comment:执行器配置(JSON)" json:"executor_config"`
 	CronExpr       string      `gorm:"size:64;not null;comment:Cron表达式" json:"cron_expr"`
+	
+	// 增强调度字段
+	Timezone       string      `gorm:"size:64;default:'Local';comment:时区" json:"timezone"`
+	StartTime      *time.Time  `gorm:"comment:调度开始时间" json:"start_time,omitempty"`
+	EndTime        *time.Time  `gorm:"comment:调度结束时间" json:"end_time,omitempty"`
+	
+	// 执行统计
+	NextRunTime    *time.Time  `gorm:"index;comment:下次执行时间" json:"next_run_time,omitempty"`
+	LastRunTime    *time.Time  `gorm:"comment:上次执行时间" json:"last_run_time,omitempty"`
+	ExecutionCount int64       `gorm:"not null;default:0;comment:执行次数" json:"execution_count"`
+	SuccessCount   int64       `gorm:"not null;default:0;comment:成功次数" json:"success_count"`
+	FailedCount    int64       `gorm:"not null;default:0;comment:失败次数" json:"failed_count"`
+	
+	// 执行限制
+	MaxExecutions  int64       `gorm:"not null;default:0;comment:最大执行次数(0=无限制)" json:"max_executions"`
+	
+	// 基础配置
 	Timeout        int         `gorm:"not null;default:300;comment:超时时间(秒)" json:"timeout"`
 	RetryCount     int         `gorm:"not null;default:0;comment:重试次数" json:"retry_count"`
 	RetryInterval  int         `gorm:"not null;default:60;comment:重试间隔(秒)" json:"retry_interval"`
@@ -53,4 +70,51 @@ func (Task) TableName() string {
 // IsEnabled 检查任务是否启用
 func (t *Task) IsEnabled() bool {
 	return t.Status == TaskStatusEnabled
+}
+
+// CanExecute 检查任务是否可以执行
+func (t *Task) CanExecute(now time.Time) bool {
+	// 检查是否启用
+	if !t.IsEnabled() {
+		return false
+	}
+
+	// 检查调度时间窗口
+	if t.StartTime != nil && now.Before(*t.StartTime) {
+		return false
+	}
+	if t.EndTime != nil && now.After(*t.EndTime) {
+		return false
+	}
+
+	// 检查最大执行次数限制
+	if t.MaxExecutions > 0 && t.ExecutionCount >= t.MaxExecutions {
+		return false
+	}
+
+	return true
+}
+
+// HasReachedMaxExecutions 检查是否已达到最大执行次数
+func (t *Task) HasReachedMaxExecutions() bool {
+	return t.MaxExecutions > 0 && t.ExecutionCount >= t.MaxExecutions
+}
+
+// IsInScheduleWindow 检查当前时间是否在调度时间窗口内
+func (t *Task) IsInScheduleWindow(now time.Time) bool {
+	if t.StartTime != nil && now.Before(*t.StartTime) {
+		return false
+	}
+	if t.EndTime != nil && now.After(*t.EndTime) {
+		return false
+	}
+	return true
+}
+
+// GetSuccessRate 获取成功率
+func (t *Task) GetSuccessRate() float64 {
+	if t.ExecutionCount == 0 {
+		return 0
+	}
+	return float64(t.SuccessCount) / float64(t.ExecutionCount) * 100
 }

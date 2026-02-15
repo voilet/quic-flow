@@ -100,13 +100,13 @@ func AddTaskRoutes(
 		logger.Error("Router is nil, cannot register task routes")
 		return
 	}
-	
+
 	apiGroup := router.Group("/api")
 	if apiGroup == nil {
 		logger.Error("API group is nil, cannot register task routes")
 		return
 	}
-	
+
 	logger.Info("Router and API group are ready", "router_exists", router != nil, "apiGroup_exists", apiGroup != nil)
 
 	// 任务管理 API
@@ -131,6 +131,39 @@ func AddTaskRoutes(
 	}
 
 	logger.Info("Task management routes registered successfully")
+}
+
+// AddClientTagRoutes 添加客户端标签管理 API 路由
+func AddClientTagRoutes(
+	httpServer *api.HTTPServer,
+	db *gorm.DB,
+	logger *monitoring.Logger,
+) {
+	if db == nil {
+		logger.Warn("Database not available, skipping client tag routes")
+		return
+	}
+
+	// 使用 GetRouter() 获取路由器，然后创建 /api 路由组
+	router := httpServer.GetRouter()
+	if router == nil {
+		logger.Error("Router is nil, cannot register client tag routes")
+		return
+	}
+
+	apiGroup := router.Group("/api")
+	if apiGroup == nil {
+		logger.Error("API group is nil, cannot register client tag routes")
+		return
+	}
+
+	// 创建客户端标签存储层
+	clientTagStore := store.NewClientTagStore(db)
+
+	// 客户端标签管理 API
+	clientTagAPI := api.NewClientTagAPI(clientTagStore, logger)
+	clientTagAPI.RegisterRoutes(apiGroup)
+	logger.Info("Client tag API routes registered", "path", "/api/client-tags")
 }
 
 // RegisterTaskResultHandler 注册任务执行结果处理器到服务器路由

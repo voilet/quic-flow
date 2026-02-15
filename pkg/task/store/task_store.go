@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/voilet/quic-flow/pkg/task/models"
 	"gorm.io/gorm"
@@ -19,6 +20,23 @@ type TaskStore interface {
 	BindGroup(ctx context.Context, taskID int64, groupID int64) error
 	UnbindGroup(ctx context.Context, taskID int64, groupID int64) error
 	GetGroupIDs(ctx context.Context, taskID int64) ([]int64, error)
+	
+	// 增强方法 - 执行统计
+	UpdateNextRunTime(ctx context.Context, taskID int64, nextRunTime *time.Time) error
+	UpdateExecutionStats(ctx context.Context, taskID int64, success bool) error
+	IncrementExecutionCount(ctx context.Context, taskID int64) error
+	GetTasksNeedingExecution(ctx context.Context, beforeTime time.Time) ([]*models.Task, error)
+	GetTaskStats(ctx context.Context, taskID int64) (*TaskStats, error)
+}
+
+// TaskStats 任务统计信息
+type TaskStats struct {
+	TotalExecutions   int64   `json:"total_executions"`
+	SuccessCount      int64   `json:"success_count"`
+	FailedCount       int64   `json:"failed_count"`
+	SuccessRate       float64 `json:"success_rate"`
+	LastExecutionTime string  `json:"last_execution_time"`
+	NextExecutionTime string  `json:"next_execution_time"`
 }
 
 // ListParams 列表查询参数
@@ -157,4 +175,82 @@ func (s *taskStoreImpl) GetGroupIDs(ctx context.Context, taskID int64) ([]int64,
 	}
 
 	return groupIDs, nil
+}
+
+// UpdateNextRunTime 更新下次执行时间
+func (s *taskStoreImpl) UpdateNextRunTime(ctx context.Context, taskID int64, nextRunTime *time.Time) error {
+	return s.db.WithContext(ctx).
+		Model(&models.Task{}).
+		Where("id = ?", taskID).
+		Update("next_run_time", nextRunTime).Error
+}
+
+// UpdateExecutionStats 更新执行统计
+func (s *taskStoreImpl) UpdateExecutionStats(ctx context.Context, taskID int64, success bool) error {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"last_run_time":   now,
+		"execution_count": gorm.Expr("execution_count + 1"),
+	}
+
+	if success {
+		updates["success_count"] = gorm.Expr("success_count + 1")
+	} else {
+		updates["failed_count"] = gorm.Expr("failed_count + 1")
+	}
+
+	return s.db.WithContext(ctx).
+		Model(&models.Task{}).
+		Where("id = ?", taskID).
+		Updates(updates).Error
+}
+
+// IncrementExecutionCount 增加执行次数
+func (s *taskStoreImpl) IncrementExecutionCount(ctx context.Context, taskID int64) error {
+	now := time.Now()
+	return s.db.WithContext(ctx).
+		Model(&models.Task{}).
+		Where("id = ?", taskID).
+		Updates(map[string]interface{}{
+			"execution_count": gorm.Expr("execution_count + 1"),
+			"last_run_time":   now,
+		}).Error
+}
+
+// GetTasksNeedingExecution 获取需要执行的任务（下次执行时间已过）
+func (s *taskStoreImpl) GetTasksNeedingExecution(ctx context.Context, beforeTime time.Time) ([]*models.Task, error) {
+	var tasks []*models.Task
+	err := s.db.WithContext(ctx).
+		Where("status = ?", int(models.TaskStatusEnabled)).
+		Where("next_run_time IS NOT NULL").
+		Where("next_run_time <= ?", beforeTime).
+		Where("(max_executions = 0 OR execution_count < max_executions)").
+		Where("(end_time IS NULL OR end_time > ?)", time.Now()).
+		Preload("Groups").
+		Find(&tasks).Error
+	return tasks, err
+}
+
+// GetTaskStats 获取任务统计信息
+func (s *taskStoreImpl) GetTaskStats(ctx context.Context, taskID int64) (*TaskStats, error) {
+	var task models.Task
+	if err := s.db.WithContext(ctx).First(&task, taskID).Error; err != nil {
+		return nil, err
+	}
+
+	stats := &TaskStats{
+		TotalExecutions: task.ExecutionCount,
+		SuccessCount:    task.SuccessCount,
+		FailedCount:     task.FailedCount,
+		SuccessRate:     task.GetSuccessRate(),
+	}
+
+	if task.LastRunTime != nil {
+		stats.LastExecutionTime = task.LastRunTime.Format(time.RFC3339)
+	}
+	if task.NextRunTime != nil {
+		stats.NextExecutionTime = task.NextRunTime.Format(time.RFC3339)
+	}
+
+	return stats, nil
 }

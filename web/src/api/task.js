@@ -45,6 +45,16 @@ export const taskApi = {
   // 获取下次执行时间
   getNextRunTime(id) {
     return request.get(`/tasks/${id}/next-run`)
+  },
+
+  // 获取任务统计信息
+  getTaskStats(id) {
+    return request.get(`/tasks/${id}/stats`)
+  },
+
+  // 重置任务统计信息
+  resetTaskStats(id) {
+    return request.post(`/tasks/${id}/reset-stats`)
   }
 }
 

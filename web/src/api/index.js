@@ -195,6 +195,120 @@ export const api = {
     return request.get(`/hardware/devices/${clientId}/hardware`)
   },
 
+  // ===== 客户端标签管理 API =====
+
+  // 获取标签列表
+  getClientTags(withCount = false) {
+    return request.get('/client-tags', { params: { with_count: withCount } })
+  },
+
+  // 获取标签详情
+  getClientTag(id) {
+    return request.get(`/client-tags/${id}`)
+  },
+
+  // 创建标签
+  createClientTag(data) {
+    return request.post('/client-tags', data)
+  },
+
+  // 更新标签
+  updateClientTag(id, data) {
+    return request.put(`/client-tags/${id}`, data)
+  },
+
+  // 删除标签
+  deleteClientTag(id) {
+    return request.delete(`/client-tags/${id}`)
+  },
+
+  // 获取标签下的客户端列表
+  getTagClients(id) {
+    return request.get(`/client-tags/${id}/clients`)
+  },
+
+  // 添加客户端到标签
+  addTagClients(id, clientIds) {
+    return request.post(`/client-tags/${id}/clients`, { client_ids: clientIds })
+  },
+
+  // 从标签移除客户端
+  removeTagClient(id, clientId) {
+    return request.delete(`/client-tags/${id}/clients/${clientId}`)
+  },
+
+  // 获取客户端的所有标签
+  getClientTagsByClient(clientId) {
+    return request.get(`/clients/${clientId}/tags`)
+  },
+
+  // 设置客户端的标签（覆盖）
+  setClientTags(clientId, tagIds) {
+    return request.put(`/clients/${clientId}/tags`, { tag_ids: tagIds })
+  },
+
+  // 批量设置客户端标签
+  batchSetClientTags(clientIds, tagIds) {
+    return request.post('/clients/batch-tags', { client_ids: clientIds, tag_ids: tagIds })
+  },
+
+  // 根据标签获取客户端
+  getClientsByTags(tagIds) {
+    return request.post('/clients/by-tags', { tag_ids: tagIds })
+  },
+
+  // ===== 脚本管理 API =====
+
+  // 获取脚本列表
+  getScripts(category = '', status = '', withStats = false) {
+    return request.get('/scripts', { params: { category, status, with_stats: withStats } })
+  },
+
+  // 获取脚本详情
+  getScript(id) {
+    return request.get(`/scripts/${id}`)
+  },
+
+  // 创建脚本
+  createScript(data) {
+    return request.post('/scripts', data)
+  },
+
+  // 更新脚本
+  updateScript(id, data) {
+    return request.put(`/scripts/${id}`, data)
+  },
+
+  // 删除脚本
+  deleteScript(id) {
+    return request.delete(`/scripts/${id}`)
+  },
+
+  // 获取脚本版本列表
+  getScriptVersions(scriptId) {
+    return request.get(`/scripts/${scriptId}/versions`)
+  },
+
+  // 创建脚本版本
+  createScriptVersion(scriptId, data) {
+    return request.post(`/scripts/${scriptId}/versions`, data)
+  },
+
+  // 执行脚本
+  executeScript(scriptId, data) {
+    return request.post(`/scripts/${scriptId}/execute`, data)
+  },
+
+  // 获取脚本执行记录
+  getScriptExecutions(scriptId, limit = 20) {
+    return request.get(`/scripts/${scriptId}/executions`, { params: { limit } })
+  },
+
+  // 获取执行记录详情
+  getScriptExecution(executionId) {
+    return request.get(`/scripts/executions/${executionId}`)
+  },
+
   // ===== 硬件设备管理 API =====
 
   // 获取设备列表

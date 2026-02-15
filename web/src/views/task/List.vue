@@ -53,6 +53,21 @@
           </template>
         </el-table-column>
         <el-table-column prop="cron_expr" label="Cron 表达式" width="150" />
+        <el-table-column label="执行统计" width="140">
+          <template #default="{ row }">
+            <div class="execution-stats">
+              <span class="stats-item">
+                <el-tag size="small" type="info">{{ row.execution_count || 0 }} 次</el-tag>
+              </span>
+              <span class="stats-item">
+                <el-tag size="small" type="success">{{ row.success_count || 0 }}</el-tag>
+              </span>
+              <span class="stats-item">
+                <el-tag size="small" type="danger">{{ row.failed_count || 0 }}</el-tag>
+              </span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'">
@@ -301,5 +316,15 @@ onUnmounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.execution-stats {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.stats-item {
+  margin-right: 2px;
 }
 </style>
