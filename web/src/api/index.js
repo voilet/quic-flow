@@ -580,6 +580,33 @@ export const api = {
     return request.get('/alerts', { params: { ...params, status: 'firing' } })
   },
 
+  // ===== 发布项管理 =====
+
+  // 获取项目的发布项列表
+  getReleaseItems(projectId) {
+    return request.get(`/release/projects/${projectId}/release-items`)
+  },
+
+  // 获取发布项详情
+  getReleaseItem(id) {
+    return request.get(`/release/release-items/${id}`)
+  },
+
+  // 创建发布项
+  createReleaseItem(projectId, data) {
+    return request.post(`/release/projects/${projectId}/release-items`, data)
+  },
+
+  // 更新发布项
+  updateReleaseItem(id, data) {
+    return request.put(`/release/release-items/${id}`, data)
+  },
+
+  // 删除发布项
+  deleteReleaseItem(id) {
+    return request.delete(`/release/release-items/${id}`)
+  },
+
   // 环境管理
   getEnvironments(projectId) {
     return request.get(`/release/projects/${projectId}/environments`)

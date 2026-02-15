@@ -209,14 +209,69 @@ func (s *StringSlice) Scan(value interface{}) error {
 
 // ==================== 核心模型 ====================
 
-// Project 项目
+// Project 项目/业务系统（顶层容器）
+// 一个项目可以包含多个发布项（ReleaseItem），如前端、后端、数据库等
+// 旧版兼容：如果只有一个发布项，可以直接使用 Project 的配置字段
 type Project struct {
+	ID          string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	Name        string `gorm:"uniqueIndex;size:100;not null" json:"name"`
+	Description string `gorm:"size:500" json:"description"`
+
+	// 项目类型（可选，用于分类展示）
+	Category string `gorm:"size:50" json:"category,omitempty"` // web/api/service/job 等
+
+	// ===== 以下字段用于向后兼容（单发布项场景） =====
+	// 新版建议使用 ReleaseItem 管理多个发布项
+	Type DeployType `gorm:"size:20;not null;default:'script'" json:"type"` // 部署类型
+
+	// 代码仓库（可选）
+	RepoURL  string `gorm:"size:500" json:"repo_url"`
+	RepoType string `gorm:"size:20" json:"repo_type"` // git/svn
+
+	// 脚本部署配置（type=script 时使用）
+	ScriptConfig *ScriptDeployConfig `gorm:"type:jsonb" json:"script_config,omitempty"`
+
+	// 容器部署配置（type=container 时使用）
+	ContainerConfig *ContainerDeployConfig `gorm:"type:jsonb" json:"container_config,omitempty"`
+
+	// Kubernetes 部署配置（type=kubernetes 时使用）
+	KubernetesConfig *KubernetesDeployConfig `gorm:"type:jsonb" json:"kubernetes_config,omitempty"`
+
+	// Git 拉取部署配置（type=gitpull 时使用）
+	GitPullConfig *GitPullDeployConfig `gorm:"type:jsonb" json:"gitpull_config,omitempty"`
+
+	// 容器命名配置（用于容器/K8s部署）
+	ContainerNaming *ContainerNamingConfig `gorm:"type:jsonb" json:"container_naming,omitempty"`
+
+	// 回调通知配置（项目级别）
+	CallbackConfig *CallbackConfig `gorm:"type:jsonb" json:"callback_config,omitempty"`
+	// ===== 向后兼容字段结束 =====
+
+	// 关联的发布项
+	ReleaseItems []ReleaseItem `gorm:"foreignKey:ProjectID" json:"release_items,omitempty"`
+
+	// 环境变量（项目级别，可被发布项继承）
+	Variables []Variable `gorm:"foreignKey:ProjectID" json:"variables,omitempty"`
+
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// ReleaseItem 发布项/服务组件
+// 一个项目下的具体发布单元，如前端、后端 API、数据库等
+// 每个发布项有独立的部署类型和配置
+type ReleaseItem struct {
 	ID          string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	Name        string     `gorm:"uniqueIndex;size:100;not null" json:"name"`
+	ProjectID   string     `gorm:"type:uuid;index;not null" json:"project_id"`
+	Name        string     `gorm:"size:100;not null" json:"name"`              // 发布项名称：前端、后端 API、数据库
 	Description string     `gorm:"size:500" json:"description"`
-	Type        DeployType `gorm:"size:20;not null" json:"type"`
+	Type        DeployType `gorm:"size:20;not null" json:"type"`               // 部署类型
 	RepoURL     string     `gorm:"size:500" json:"repo_url"`
 	RepoType    string     `gorm:"size:20" json:"repo_type"` // git/svn
+
+	// 排序权重（用于展示顺序）
+	SortOrder int `gorm:"default:0" json:"sort_order"`
 
 	// 脚本部署配置
 	ScriptConfig *ScriptDeployConfig `gorm:"type:jsonb" json:"script_config,omitempty"`
@@ -233,9 +288,12 @@ type Project struct {
 	// 容器命名配置（用于容器/K8s部署）
 	ContainerNaming *ContainerNamingConfig `gorm:"type:jsonb" json:"container_naming,omitempty"`
 
+	// 回调通知配置（发布项级别）
+	CallbackConfig *CallbackConfig `gorm:"type:jsonb" json:"callback_config,omitempty"`
+
 	// 关联
-	Environments []Environment `gorm:"foreignKey:ProjectID" json:"environments,omitempty"`
-	Variables    []Variable    `gorm:"foreignKey:ProjectID" json:"variables,omitempty"`
+	Project  Project   `gorm:"foreignKey:ProjectID" json:"-"`
+	Versions []Version `gorm:"foreignKey:ReleaseItemID" json:"versions,omitempty"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -944,15 +1002,16 @@ func (k *KubernetesDeployConfig) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, k)
 }
 
-// Version 版本（每个项目可创建多个版本）
+// Version 版本（每个发布项可创建多个版本）
 type Version struct {
 	ID          string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	ProjectID   string `gorm:"type:uuid;index;not null" json:"project_id"`
+	ProjectID   string `gorm:"type:uuid;index;not null" json:"project_id"`        // 冗余存储，便于查询
+	ReleaseItemID string `gorm:"type:uuid;index;not null" json:"release_item_id"`  // 关联的发布项
 	Version     string `gorm:"size:50;not null" json:"version"`
 	Description string `gorm:"size:500" json:"description"`
 	WorkDir     string `gorm:"size:500;default:'/opt/app'" json:"work_dir"`
 
-	// 四种操作脚本
+	// 四种操作脚本（继承自发布项，可在此覆盖）
 	InstallScript   string `gorm:"type:text" json:"install_script"`
 	UpdateScript    string `gorm:"type:text" json:"update_script"`
 	RollbackScript  string `gorm:"type:text" json:"rollback_script"`
@@ -981,7 +1040,8 @@ type Version struct {
 	DeployCount int `gorm:"default:0" json:"deploy_count"`
 
 	// 关联
-	Project Project `gorm:"foreignKey:ProjectID" json:"-"`
+	Project     Project     `gorm:"foreignKey:ProjectID" json:"-"`
+	ReleaseItem ReleaseItem `gorm:"foreignKey:ReleaseItemID" json:"-"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -999,10 +1059,11 @@ const (
 
 // DeployTask 部署任务
 type DeployTask struct {
-	ID        string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	ProjectID string `gorm:"type:uuid;index;not null" json:"project_id"`
-	VersionID string `gorm:"type:uuid;index;not null" json:"version_id"`
-	Version   string `gorm:"size:50;not null" json:"version"` // 冗余存储版本号
+	ID            string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	ProjectID     string `gorm:"type:uuid;index;not null" json:"project_id"`          // 冗余存储，便于查询
+	ReleaseItemID string `gorm:"type:uuid;index;not null" json:"release_item_id"`     // 关联的发布项
+	VersionID     string `gorm:"type:uuid;index;not null" json:"version_id"`
+	Version       string `gorm:"size:50;not null" json:"version"` // 冗余存储版本号
 
 	// 操作类型
 	Operation OperationType `gorm:"size:20;not null" json:"operation"`
@@ -1454,6 +1515,7 @@ func (DeployTaskLog) TableName() string {
 // AllModels 所有模型列表
 var AllModels = []interface{}{
 	&Project{},
+	&ReleaseItem{},
 	&Environment{},
 	&Target{},
 	&Variable{},

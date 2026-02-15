@@ -98,6 +98,13 @@ func (api *ReleaseAPI) RegisterRoutes(r *gin.RouterGroup) {
 		release.PUT("/projects/:id", api.UpdateProject)
 		release.DELETE("/projects/:id", api.DeleteProject)
 
+		// 发布项管理
+		release.POST("/projects/:id/release-items", api.CreateReleaseItem)
+		release.GET("/projects/:id/release-items", api.ListReleaseItems)
+		release.GET("/release-items/:id", api.GetReleaseItem)
+		release.PUT("/release-items/:id", api.UpdateReleaseItem)
+		release.DELETE("/release-items/:id", api.DeleteReleaseItem)
+
 		// 环境管理
 		release.POST("/projects/:id/environments", api.CreateEnvironment)
 		release.GET("/projects/:id/environments", api.ListEnvironments)
@@ -396,6 +403,168 @@ func (api *ReleaseAPI) UpdateProject(c *gin.Context) {
 func (api *ReleaseAPI) DeleteProject(c *gin.Context) {
 	id := c.Param("id")
 	if err := api.db.Delete(&models.Project{}, "id = ?", id).Error; err != nil {
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
+		return
+	}
+
+	common.SuccessResp(c, gin.H{})
+}
+
+// ==================== 发布项管理 ====================
+
+// CreateReleaseItem 创建发布项
+func (api *ReleaseAPI) CreateReleaseItem(c *gin.Context) {
+	projectID := c.Param("id")
+
+	var req struct {
+		Name              string                          `json:"name" binding:"required"`
+		Description       string                          `json:"description"`
+		Type              models.DeployType               `json:"type" binding:"required"`
+		RepoURL           string                          `json:"repo_url"`
+		RepoType          string                          `json:"repo_type"`
+		SortOrder         int                             `json:"sort_order"`
+		ScriptConfig      *models.ScriptDeployConfig      `json:"script_config"`
+		ContainerConfig   *models.ContainerDeployConfig   `json:"container_config"`
+		KubernetesConfig  *models.KubernetesDeployConfig  `json:"kubernetes_config"`
+		GitPullConfig     *models.GitPullDeployConfig     `json:"gitpull_config"`
+		ContainerNaming   *models.ContainerNamingConfig   `json:"container_naming"`
+		CallbackConfig    *models.CallbackConfig          `json:"callback_config"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
+		return
+	}
+
+	item := &models.ReleaseItem{
+		ProjectID:         projectID,
+		Name:              req.Name,
+		Description:       req.Description,
+		Type:              req.Type,
+		RepoURL:           req.RepoURL,
+		RepoType:          req.RepoType,
+		SortOrder:         req.SortOrder,
+		ScriptConfig:      req.ScriptConfig,
+		ContainerConfig:   req.ContainerConfig,
+		KubernetesConfig:  req.KubernetesConfig,
+		GitPullConfig:     req.GitPullConfig,
+		ContainerNaming:   req.ContainerNaming,
+		CallbackConfig:    req.CallbackConfig,
+	}
+
+	if err := api.db.Create(item).Error; err != nil {
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
+		return
+	}
+
+	common.SuccessResp(c, item)
+}
+
+// ListReleaseItems 列出项目的发布项
+func (api *ReleaseAPI) ListReleaseItems(c *gin.Context) {
+	projectID := c.Param("id")
+	var items []models.ReleaseItem
+	if err := api.db.Where("project_id = ?", projectID).Order("sort_order, created_at").Find(&items).Error; err != nil {
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
+		return
+	}
+
+	common.SuccessResp(c, items)
+}
+
+// GetReleaseItem 获取发布项详情
+func (api *ReleaseAPI) GetReleaseItem(c *gin.Context) {
+	id := c.Param("id")
+	var item models.ReleaseItem
+	if err := api.db.Preload("Project").Preload("Versions").First(&item, "id = ?", id).Error; err != nil {
+		common.ErrorResp(c, common.CodeServiceUnavailable, "release item not found")
+		return
+	}
+
+	common.SuccessResp(c, item)
+}
+
+// UpdateReleaseItem 更新发布项
+func (api *ReleaseAPI) UpdateReleaseItem(c *gin.Context) {
+	id := c.Param("id")
+	var item models.ReleaseItem
+	if err := api.db.First(&item, "id = ?", id).Error; err != nil {
+		common.ErrorResp(c, common.CodeServiceUnavailable, "release item not found")
+		return
+	}
+
+	var req struct {
+		Name              string                          `json:"name"`
+		Description       string                          `json:"description"`
+		Type              models.DeployType               `json:"type"`
+		RepoURL           string                          `json:"repo_url"`
+		RepoType          string                          `json:"repo_type"`
+		SortOrder         *int                            `json:"sort_order"`
+		ScriptConfig      *models.ScriptDeployConfig      `json:"script_config"`
+		ContainerConfig   *models.ContainerDeployConfig   `json:"container_config"`
+		KubernetesConfig  *models.KubernetesDeployConfig  `json:"kubernetes_config"`
+		GitPullConfig     *models.GitPullDeployConfig     `json:"gitpull_config"`
+		ContainerNaming   *models.ContainerNamingConfig   `json:"container_naming"`
+		CallbackConfig    *models.CallbackConfig          `json:"callback_config"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ErrorResp(c, common.CodeInvalidParams, err.Error())
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Description != "" {
+		updates["description"] = req.Description
+	}
+	if req.Type != "" {
+		updates["type"] = req.Type
+	}
+	if req.RepoURL != "" {
+		updates["repo_url"] = req.RepoURL
+	}
+	if req.RepoType != "" {
+		updates["repo_type"] = req.RepoType
+	}
+	if req.SortOrder != nil {
+		updates["sort_order"] = *req.SortOrder
+	}
+	if req.ScriptConfig != nil {
+		updates["script_config"] = req.ScriptConfig
+	}
+	if req.ContainerConfig != nil {
+		updates["container_config"] = req.ContainerConfig
+	}
+	if req.KubernetesConfig != nil {
+		updates["kubernetes_config"] = req.KubernetesConfig
+	}
+	if req.GitPullConfig != nil {
+		updates["gitpull_config"] = req.GitPullConfig
+	}
+	if req.ContainerNaming != nil {
+		updates["container_naming"] = req.ContainerNaming
+	}
+	if req.CallbackConfig != nil {
+		updates["callback_config"] = req.CallbackConfig
+	}
+
+	if err := api.db.Model(&item).Updates(updates).Error; err != nil {
+		common.ErrorResp(c, common.CodeInternalError, err.Error())
+		return
+	}
+
+	// 重新获取更新后的数据
+	api.db.First(&item, "id = ?", id)
+	common.SuccessResp(c, item)
+}
+
+// DeleteReleaseItem 删除发布项
+func (api *ReleaseAPI) DeleteReleaseItem(c *gin.Context) {
+	id := c.Param("id")
+	if err := api.db.Delete(&models.ReleaseItem{}, "id = ?", id).Error; err != nil {
 		common.ErrorResp(c, common.CodeInternalError, err.Error())
 		return
 	}
