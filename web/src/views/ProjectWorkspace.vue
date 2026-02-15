@@ -104,7 +104,6 @@
         stripe
         style="width: 100%"
       >
-        <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="name" label="项目名称" min-width="180">
           <template #default="{ row }">
             <div class="project-name-cell">
@@ -294,10 +293,10 @@ const handleSearchClear = () => {
   searchKeyword.value = ''
 }
 
-// 进入项目
+// 进入项目 - 默认进入发布管理页面
 const enterProject = (project) => {
   router.push({
-    path: '/project/overview',
+    path: '/project/versions',
     query: { projectId: project.id }
   })
 }
